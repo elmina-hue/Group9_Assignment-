@@ -1,7 +1,7 @@
 
 ---
 title: "PIPS Group Project"
-output: html_document
+output: 
 ---
 
 # Introduction
