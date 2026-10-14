@@ -1,0 +1,13 @@
+# PIPS Group Project — Division of Responsibilities
+
+## Primary responsibilities
+
+| Group member | Primary responsibility | Files |
+|---|---|---|
+| **Elmina**| Project structure and documentation | `README.md`, `main.Rmd`, `references.md`, and organisation  |
+| **Christos**| Data simulation and statistical analysis | `src/simulate_data.R`, `src/analysis.R`, and generation of the simulated dataset in `data/`, information for the readme and main file |
+| **Miruna**| Visualisations | `src/plots.R`, information for the readme and main file. 
+
+
+
+
