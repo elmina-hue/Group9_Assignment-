@@ -55,6 +55,3 @@ Simulated observations will not be presented as data collected from real partici
 
 Scientific papers, questionnaire sources, and methodological references will be documented in `references.md` and cited in the main report.
 
-## Project Status
-
-Currently in the planning and development stage. The research question, questionnaire, statistical method, and simulation parameters are yet to be finalised.
