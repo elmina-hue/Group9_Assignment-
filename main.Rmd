@@ -1,0 +1,41 @@
+
+---
+title: "PIPS Group Project"
+output: html_document
+---
+
+# Introduction
+
+Background and motivation for the research question.
+
+# Research Question and Hypotheses
+
+To be decided after reviewing the literature.
+
+# Method
+
+## Simulated Data
+
+Describe how the psychological data are simulated.
+
+## Statistical Analysis
+
+Describe and justify the statistical method.
+
+# Results
+
+## Descriptive Statistics
+
+## Inferential Analysis
+
+## Visualisation
+
+# Discussion
+
+## Interpretation
+
+## Limitations
+
+# Conclusion
+
+# References
