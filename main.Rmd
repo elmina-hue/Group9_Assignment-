@@ -1,41 +1,57 @@
 
 ---
-title: "PIPS Group Project"
+title: "Individual Differences in Psychological Symptom Dynamics"
 output: 
 ---
 
 # Introduction
 
-Background and motivation for the research question.
+Introduce the topic of psychological symptom dynamics, explain why individual differences matter, and briefly describe the purpose of the project.
 
 # Research Question and Hypotheses
 
-To be decided after reviewing the literature.
+State the main research question and the expected relationships between group-level and individual-level symptom networks.
 
-# Method
+# Workflow
 
-## Simulated Data
+Describe the overall workflow of the project, from generating simulated data to estimating and comparing symptom networks.
 
-Describe how the psychological data are simulated.
+## Setup
+
+Load the required R packages and supporting scripts, and configure the project environment.
+
+## Simulate Data
+
+Generate longitudinal data containing daily ratings of six psychological symptoms for multiple simulated participants. Explain the main simulation parameters and assumptions.
 
 ## Statistical Analysis
 
-Describe and justify the statistical method.
+Fit the Bayesian multilevel VAR model to estimate group-level symptom dynamics and fit an individual-level model for Participant 1.
 
 # Results
 
+Present the outputs obtained from the statistical analyses, including estimated temporal relationships and uncertainty.
+
 ## Descriptive Statistics
 
-## Inferential Analysis
+Summarise the simulated dataset, including the number of participants, observations per participant, and distributions of symptom ratings.
 
-## Visualisation
+## Group-Level and Individual-Level Networks
+
+Visualise and describe the estimated group-level network and Participant 1's individual-level network.
+
+## Comparison of Selected Edges
+
+Compare selected temporal relationships between the group and the individual, highlighting similarities, differences, and uncertainty in the estimates.
+
+# Shiny App
+
+Explain how to launch and use the app, including how to generate example participant data or upload a CSV file and compare symptom networks.
 
 # Discussion
 
-## Interpretation
-
-## Limitations
-
-# Conclusion
+Interpret the results in relation to the research question and explain what the project demonstrates about individual differences in symptom dynamics.
 
 # References
+
+List the academic sources cited throughout the report.
