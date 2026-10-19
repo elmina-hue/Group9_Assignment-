@@ -4,17 +4,8 @@ title: "Individual Differences in Psychological Symptom Dynamics"
 output: 
 ---
 
-# Introduction
-
-Introduce the topic of psychological symptom dynamics, explain why individual differences matter, and briefly describe the purpose of the project.
-
-# Research Question and Hypotheses
-
-State the main research question and the expected relationships between group-level and individual-level symptom networks.
-
-# Workflow
-
-Describe the overall workflow of the project, from generating simulated data to estimating and comparing symptom networks.
+Our project investigates how psychological symptoms relate to one another over time and whether group-level symptom relationships adequately describe the dynamics of an individual. We use simulated daily symptom
+ratings, Bayesian VAR models, and an interactive Shiny app to explore individual differences in temporal symptom networks.
 
 ## Setup
 
@@ -22,36 +13,48 @@ Load the required R packages and supporting scripts, and configure the project e
 
 ## Simulate Data
 
-Generate longitudinal data containing daily ratings of six psychological symptoms for multiple simulated participants. Explain the main simulation parameters and assumptions.
+Generate daily ratings for six psychological symptoms across multiple
+participants. Save a reproducible example dataset for use in the analysis
+and Shiny app.
 
-## Statistical Analysis
+## 3. Analyse symptom networks
 
-Fit the Bayesian multilevel VAR model to estimate group-level symptom dynamics and fit an individual-level model for Participant 1.
+Fit a Bayesian multilevel VAR model to estimate group-level symptom
+dynamics, then estimate an individual-level VAR model for Participant 1.
 
-# Results
+```{r analysis}
+# Run the group-level and individual-level analyses.
+# Final code will be added once the analysis script is integrated.
+```
 
-Present the outputs obtained from the statistical analyses, including estimated temporal relationships and uncertainty.
+## 4. Visualise and compare results
 
-## Descriptive Statistics
+Display the group-level and individual-level symptom networks.
+Compare selected autoregressive and cross-lagged relationships and
+examine uncertainty in their estimates.
 
-Summarise the simulated dataset, including the number of participants, observations per participant, and distributions of symptom ratings.
+```{r visualisation}
+# Generate the network plots and comparison visualisations.
+# Final code will be added once the plotting script is integrated.
+```
 
-## Group-Level and Individual-Level Networks
+## 5. Explore the Shiny app
 
-Visualise and describe the estimated group-level network and Participant 1's individual-level network.
+The app allows users to generate example participant data or upload a CSV
+file, inspect the individual-level network, and compare it with the
+group-level network.
 
-## Comparison of Selected Edges
+Run the app manually:
 
-Compare selected temporal relationships between the group and the individual, highlighting similarities, differences, and uncertainty in the estimates.
+```
+```
 
-# Shiny App
+## 6. Discussion
 
-Explain how to launch and use the app, including how to generate example participant data or upload a CSV file and compare symptom networks.
+Interpret the findings in relation to the research question and discuss
+the limitations of simulated data and the modelling approach.
 
-# Discussion
+## References
 
-Interpret the results in relation to the research question and explain what the project demonstrates about individual differences in symptom dynamics.
-
-# References
-
-List the academic sources cited throughout the report.
+See `references.md` for the full bibliographic details of the sources
+cited in this report.
