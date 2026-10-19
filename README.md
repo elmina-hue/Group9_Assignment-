@@ -1,63 +1,129 @@
 # Group9_Assignment-
 # PIPS Group Project
 
-## Project Overview
+1. Project Overview
 
-Psychological symptoms, such as depressed mood, fatigue, sleep problems, and nervousness, can change over time and may predict one another across consecutive days. The network approach to psychopathology conceptualises psychological disorders as systems of interconnected symptoms, represented as nodes and edges (Borsboom & Cramer, 2013; Robinaugh et al., 2020).
+This repository contains our group project for the Programming in Psychological Science (PIPS) course in the Research Master's in Psychology at the University of Amsterdam. Psychological symptoms, such as depressed mood, fatigue, sleep problems, and nervousness, can change over time and may predict one another across consecutive days. However, the relationships observed across a group of people may not fully represent the symptom dynamics of a particular individual.
 
-This project investigates temporal relationships between symptoms using ecological momentary assessment (EMA), which involves repeatedly measuring people's experiences in everyday life (Myin-Germeys et al., 2018). We use a first-order vector autoregressive model (VAR(1)) to examine whether symptoms on one day predict symptom levels on the following day.
+This project investigates temporal relationships between psychological symptoms using simulated ecological momentary assessment (EMA) data and Bayesian vector autoregressive (VAR) models. We compare group-level and individual-level symptom networks to explore whether the average pattern of relationships adequately describes an individual participant.
 
-The estimated temporal networks contain two types of relationships: autoregressive edges, which represent the persistence of a symptom over time, and cross-lagged edges, which represent predictive relationships between different symptoms across consecutive days.
+The project also includes an interactive Shiny application that will allow users to generate example participant data or upload a CSV file and explore differences between individual-level and group-level symptom networks.
 
-An important distinction is between group-level and individual-level symptom dynamics. A group-level network describes average temporal relationships across participants, whereas an individual-level network represents the relationships estimated for a particular participant. These patterns may differ, meaning that relationships observed across a group do not necessarily describe every individual's symptom dynamics. This issue is relevant to ergodicity and the generalisation of group-level findings to individuals (Molenaar, 2004; Fisher et al., 2018).
+All simulated data are generated for methodological demonstration and do not represent observations collected from real participants.
 
-## Research Question
+2. Research Question
 
 To what extent does the group-level temporal symptom network adequately describe the symptom dynamics of an individual participant, and which relationships may differ between the individual and the group?
 
-## Objectives
+3. Theoretical Background
 
-- Review scientific literature relevant to the selected psychological topic.
-- Select an appropriate questionnaire or psychological measure.
-- Generate simulated psychological data using assumptions informed by the literature.
-- Conduct an appropriate inferential statistical analysis.
-- Create informative visualisations to communicate the results.
-- Interpret the findings and discuss the limitations of simulated data.
+The project follows the network approach to psychopathology, which conceptualises psychological disorders as systems of interconnected symptoms. In a symptom network, symptoms are represented as nodes and relationships between symptoms are represented as edges (Borsboom & Cramer, 2013; Robinaugh et al., 2020).
 
-## Repository Structure
+We use ecological momentary assessment (EMA), which involves repeatedly measuring people's experiences in everyday life, to investigate how symptoms relate to one another over time (Myin-Germeys et al., 2018). A first-order vector autoregressive model (VAR(1)) estimates whether symptom levels on one day predict symptom levels on the following day.
 
-- `README.md`: Project overview, requirements, and instructions.
-- `main.Rmd`: Main report combining scientific explanations, code execution, results, visualisations, and discussion.
-- `src/simulate_data.R`: Code for generating the simulated dataset.
-- `src/analysis.R`: Code for the statistical analysis.
-- `src/plots.R`: Code for creating visualisations.
-- `data/`: Folder for generated datasets and related documentation.
-- `references.md`: Scientific papers and methodological references used in the project.
+The resulting temporal network contains two types of relationships:
 
-## Requirements
+Autoregressive edges: Represent the persistence of a symptom from one measurement to the next.
 
-- R (version to be specified).
-- RStudio (recommended).
-- Required R packages: To be specified once the analysis and visualisation methods have been selected.
+Cross-lagged edges: Represent predictive relationships between different symptoms across consecutive measurements.
 
-## Getting Started
+We distinguish between group-level symptom dynamics, which describe average temporal relationships across participants, and individual-level symptom dynamics, which describe relationships estimated for a particular participant. These patterns may differ, highlighting the limitations of assuming that group-level findings apply equally to every individual.
 
-1. Clone or download this repository.
-2. Install R and, if preferred, RStudio.
-3. Install the required R packages listed in this README.
-4. Open `main.Rmd` in RStudio.
-5. Follow the report from top to bottom to run the simulation and statistical analysis and generate the visualisations.
+4. Project Objectives
 
-Detailed instructions will be updated once the workflow has been implemented and tested.
+The project aims to:
 
-## Data
+Generate simulated longitudinal data containing daily ratings of six psychological symptoms.
 
-The project will use simulated psychological data. The simulation procedure, variables, and assumptions will be documented in `src/simulate_data.R` and explained in the main report.
+Estimate group-level temporal relationships using a Bayesian multilevel VAR(1) model.
 
-Simulated observations will not be presented as data collected from real participants.
+Estimate an individual-level symptom network and compare it with the group-level network.
+
+Visualise symptom networks and compare selected temporal relationships.
+
+Explore uncertainty in estimated relationships and differences between the group and the individual.
+
+Develop a Shiny app for generating example data or uploading participant data and exploring symptom networks.
+
+Discuss the implications and limitations of using simulated data to demonstrate individual differences.
+
+5. Methodological Approach
+
+5.1 Data Simulation
+
+The initial simulation generates daily ratings for six symptoms across 25 simulated participants, with 100 observations per participant.
+
+The symptom variables are:
+
+down: Depressed mood
+
+tired: Tiredness
+
+sleep: Sleep problems
+
+nervous: Nervousness
+
+worry: Worry
+
+irritable: Irritability
+
+The simulation specifies a group-level pattern of temporal relationships and allows individual participants to differ from this pattern. These assumptions are used to demonstrate how individual-level networks may resemble or differ from the group-level network.
+
+5.2 Statistical Analysis
+
+A Bayesian VAR(1) model is used to estimate temporal relationships between symptoms across consecutive days.
+
+Two analyses are planned:
+
+Group-level analysis: A Bayesian multilevel VAR model estimates average temporal relationships across participants while accounting for between-person variation.
+
+Individual-level analysis: A separate VAR model estimates temporal relationships using observations from an individual participant.
+
+The analyses will compare selected temporal coefficients and their uncertainty to investigate similarities and differences between the individual-level and group-level networks.
+
+Bayesian estimation provides posterior distributions for model parameters and allows comparisons between hypotheses using Bayes factors where appropriate.
+
+5.3 Visualisation
 
 
-## References
+5.4 Interactive Shiny Application
 
-Scientific papers, questionnaire sources, and methodological references will be documented in `references.md` and cited in the main report.
+6. Repository Structure
+
+The repository is organised as follows:
+
+README.md: Project overview, methodology, requirements, and instructions.
+
+main.Rmd: Main project deliverable, combining explanations, code execution, analysis, visualisations, results, and discussion.
+
+references.md: Scientific and methodological references.
+
+src/simulate_data.R: Code for generating simulated longitudinal symptom data.
+
+src/analysis.R: Code for fitting the Bayesian VAR models and comparing temporal relationships.
+
+src/plots.R: Code for creating symptom network visualisations and comparison plots.
+
+data/: Directory for the saved example dataset and related documentation.
+
+app.R: Shiny application for generating or uploading participant data and exploring symptom networks.
+
+7. Requirements and Dependencies
+
+  
+8. Getting Started
+ 8.1 Obtaining the Repository
+   
+   8.2 Installing Dependencies
+   
+   8.3 Running the Main Deliverable
+   
+   8.4 Launching the Shiny App
+
+   9. Data
+  
+   10. Interpretation
+  
+   11. References
+   12. 
 
