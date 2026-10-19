@@ -112,15 +112,16 @@ app.R: Shiny application for generating or uploading participant data and explor
 
   
 8. Getting Started
- 8.1 Obtaining the Repository
    
-   8.2 Installing Dependencies
+8.1 Obtaining the Repository
    
-   8.3 Running the Main Deliverable
+8.2 Installing Dependencies
    
-   8.4 Launching the Shiny App
+8.3 Running the Main Deliverable
+   
+8.4 Launching the Shiny App
 
-   9. Data
+9. Data
   
    10. Interpretation
   
