@@ -3,11 +3,17 @@
 
 ## Project Overview
 
-This repository contains our group project for the Programming in Psychological Science (PIPS) course in the Research Master's in Psychology at the University of Amsterdam.
+Psychological symptoms, such as depressed mood, fatigue, sleep problems, and nervousness, can change over time and may predict one another across consecutive days. The network approach to psychopathology conceptualises psychological disorders as systems of interconnected symptoms, represented as nodes and edges (Borsboom & Cramer, 2013; Robinaugh et al., 2020).
+
+This project investigates temporal relationships between symptoms using ecological momentary assessment (EMA), which involves repeatedly measuring people's experiences in everyday life (Myin-Germeys et al., 2018). We use a first-order vector autoregressive model (VAR(1)) to examine whether symptoms on one day predict symptom levels on the following day.
+
+The estimated temporal networks contain two types of relationships: autoregressive edges, which represent the persistence of a symptom over time, and cross-lagged edges, which represent predictive relationships between different symptoms across consecutive days.
+
+An important distinction is between group-level and individual-level symptom dynamics. A group-level network describes average temporal relationships across participants, whereas an individual-level network represents the relationships estimated for a particular participant. These patterns may differ, meaning that relationships observed across a group do not necessarily describe every individual's symptom dynamics. This issue is relevant to ergodicity and the generalisation of group-level findings to individuals (Molenaar, 2004; Fisher et al., 2018).
 
 ## Research Question
 
-To be determined.
+To what extent does the group-level temporal symptom network adequately describe the symptom dynamics of an individual participant, and which relationships may differ between the individual and the group?
 
 ## Objectives
 
