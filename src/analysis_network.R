@@ -62,3 +62,16 @@ fit_p1_wide <- bvar(
   K = 1, data = ema_p1, family = "gaussian", priors = pr_wide,
   iter = 4000, warmup = 1000, chains = 4, cores = 4, seed = 2026
 )
+
+# Extract sleep -> tired edge across all three models
+edge_original <- extract_temporal(fit_p1_original)[
+  extract_temporal(fit_p1_original)$predictor == "lag1_sleep" &
+    extract_temporal(fit_p1_original)$outcome == "tired", ]
+
+edge_narrow <- extract_temporal(fit_p1_narrow)[
+  extract_temporal(fit_p1_narrow)$predictor == "lag1_sleep" &
+    extract_temporal(fit_p1_narrow)$outcome == "tired", ]
+
+edge_wide <- extract_temporal(fit_p1_wide)[
+  extract_temporal(fit_p1_wide)$predictor == "lag1_sleep" &
+    extract_temporal(fit_p1_wide)$outcome == "tired", ]
