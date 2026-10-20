@@ -120,6 +120,21 @@ app.R: Shiny application for generating or uploading participant data and explor
 8.3 Running the Main Deliverable
    
 8.4 Launching the Shiny App
+An initial version of the Shiny app has been developed to explore and compare group-level and participant-level temporal symptom networks.
+
+The app is intended to allow users to:
+
+Generate simulated participant data by selecting the number of daily observations and a random seed, or upload a participant CSV.
+
+View the participant's temporal network alongside the group network.
+
+Compare edge estimates and their differences.
+
+Adjust network display settings, including the minimum edge size, self-loops, and edge labels.
+
+The app validates the uploaded data and fits a Bayesian lag-one VAR model to the selected participant. It loads a saved group network when available or attempts to fit the group model using the group data.
+
+Current status: The app is still being integrated with the project. Its file paths, data inputs, CSV upload functionality, and compatibility with the final simulation and analysis scripts need to be checked before final launch instructions can be provided.
 
 9. Data
   
