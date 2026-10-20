@@ -40,9 +40,13 @@ examine uncertainty in their estimates.
 
 ## 5. Explore the Shiny app
 
-The app allows users to generate example participant data or upload a CSV
-file, inspect the individual-level network, and compare it with the
-group-level network.
+The project includes an initial Shiny app designed to make the comparison between group-level and participant-level temporal symptom networks interactive.
+
+Users can generate simulated participant data or upload a CSV containing daily ratings for the six symptoms: down, tired, sleep, nervous, worry, and irritable. The app displays the participant's estimated temporal network alongside the group network and provides a table comparing edge estimates and their differences. Users can also adjust the network display settings.
+
+The app uses a Bayesian lag-one VAR model to estimate temporal associations between symptoms. These associations describe predictive relationships across consecutive days and should not be interpreted as proof of causation. Simulated participant data are illustrative and do not represent observed clinical responses.
+
+The app is an initial implementation. Its integration with the final simulation and analysis workflows, file paths, and data inputs still needs to be verified.
 
 Run the app manually:
 
