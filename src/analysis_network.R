@@ -100,3 +100,21 @@ print(bf_comparison)
 edge_wide <- extract_temporal(fit_p1_wide)[
   extract_temporal(fit_p1_wide)$predictor == "lag1_sleep" &
     extract_temporal(fit_p1_wide)$outcome == "tired", ]
+
+# Overlay posterior plot using base R
+means  <- c(edge_narrow$mean, edge_original$mean, edge_wide$mean)
+q5s    <- c(edge_narrow$q5,   edge_original$q5,   edge_wide$q5)
+q95s   <- c(edge_narrow$q95,  edge_original$q95,  edge_wide$q95)
+labels <- c("Narrow (0.35)", "Original (0.50)", "Wide (0.65)")
+colors <- c("steelblue", "black", "firebrick")
+
+plot(1:3, means, ylim = c(min(q5s) - 0.05, max(q95s) + 0.05),
+     xlim = c(0.5, 3.5), xaxt = "n", pch = 19, col = colors, cex = 1.5,
+     ylab = "Posterior estimate", xlab = "Prior scale",
+     main = "Sensitivity analysis: sleep -> tired (P1)")
+axis(1, at = 1:3, labels = labels)
+abline(h = 0, lty = 2, col = "gray")
+for (i in 1:3) {
+  lines(c(i, i), c(q5s[i], q95s[i]), col = colors[i], lwd = 2)
+}
+legend("topright", legend = labels, col = colors, lwd = 2, pch = 19)
