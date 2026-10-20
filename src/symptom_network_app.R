@@ -46,7 +46,9 @@ validate_symptom_data <- function(data) {
   data <- data[order(data$day), , drop = FALSE]
   if (nrow(data) < 30) stop("At least 30 consecutive daily observations are required.")
   if (any(diff(data$day) != 1)) stop("Days must be consecutive.")
-  if (any(as.matrix(data[symptoms]) < 1 | as.matrix(data[symptoms]) > 4)) stop("Ratings must be between 1 and 4.")
+  ratings <- as.matrix(data[symptoms])
+  if (any(ratings < 1 | ratings > 4)) stop("Ratings must be between 1 and 4.")
+  if (any(ratings != round(ratings))) stop("Ratings must be whole numbers from 1 to 4.")
   data
 }
 
