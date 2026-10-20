@@ -63,6 +63,8 @@ fit_p1_wide <- bvar(
   iter = 4000, warmup = 1000, chains = 4, cores = 4, seed = 2026
 )
 
+### Assume we are interested in the temporal coefficient between sleep problems and feeling tired, since it might consitute a potential treatment target ###
+### To assess if this is a treatment target, we must extract the temporal coefficient between these two nodes ###
 # Extract sleep -> tired edge across all three models
 edge_original <- extract_temporal(fit_p1_original)[
   extract_temporal(fit_p1_original)$predictor == "lag1_sleep" &
