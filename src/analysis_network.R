@@ -74,6 +74,29 @@ edge_narrow <- extract_temporal(fit_p1_narrow)[
   extract_temporal(fit_p1_narrow)$predictor == "lag1_sleep" &
     extract_temporal(fit_p1_narrow)$outcome == "tired", ]
 
+# Compare posteriors in a table
+sensitivity_table <- rbind(
+  data.frame(prior = "narrow (0.35)", edge_narrow),
+  data.frame(prior = "original (0.50)", edge_original),
+  data.frame(prior = "wide (0.65)", edge_wide)
+)
+sensitivity_table
+print(sensitivity_table[, c("prior", "mean", "median", "q5", "q95")])
+
+# BFs for sleep -> tired across all three models
+bf_original <- bf_table(fit_p1_original, type = "cl", variable = "sleep")
+bf_narrow   <- bf_table(fit_p1_narrow,   type = "cl", variable = "sleep")
+bf_wide     <- bf_table(fit_p1_wide,     type = "cl", variable = "sleep")
+
+bf_comparison <- data.frame(
+  prior = c("narrow (0.35)", "original (0.50)", "wide (0.65)"),
+  BF10  = c(
+    bf_narrow$BF10[bf_narrow$outcome == "tired"],
+    bf_original$BF10[bf_original$outcome == "tired"],
+    bf_wide$BF10[bf_wide$outcome == "tired"]
+  )
+)
+print(bf_comparison)
 edge_wide <- extract_temporal(fit_p1_wide)[
   extract_temporal(fit_p1_wide)$predictor == "lag1_sleep" &
     extract_temporal(fit_p1_wide)$outcome == "tired", ]
