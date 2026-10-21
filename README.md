@@ -75,9 +75,11 @@ Two complementary analyses are conducted:
 - **Group-level analysis:** A Bayesian multilevel VAR estimates temporal relationships across participants while accounting for between-person variability.
 - **Individual-level analysis:** A separate Bayesian VAR estimates temporal relationships using observations from Participant 1.
 
-The analysis extracts temporal network estimates, examines between-person variation in coefficients, and calculates Bayes factors for selected relationships where appropriate.
+The analysis extracts temporal network estimates, examines between-person variation in coefficients, and calculates Bayes factors for selected relationships where appropriate. These temporal estimates represent lagged relationships, in which a symptom at the previous time point ((t-1)) predicts a symptom at the current time point ((t)). For example, the analysis examines whether sleep problems on one day predict tiredness on the following day.
 
-A sensitivity analysis compares estimates under narrower, original, and wider prior scales for the temporal coefficients. This assesses whether conclusions about selected relationships depend on the prior specification.
+A sensitivity analysis examines the lagged relationship between sleep problems at day (t-1) and tiredness at day (t) for Participant 1. The individual-level Bayesian VAR model is refitted using three prior specifications: narrow (0.35), original (0.50), and wide (0.65).
+
+The estimated coefficient and corresponding Bayes factor are compared across the three models. The results are summarised in tables, and a plot displays the posterior means and intervals for the selected coefficient under each prior specification. This analysis assesses whether the estimated relationship is sensitive to the choice of prior.
 
 ### 3. Visualisation
 
