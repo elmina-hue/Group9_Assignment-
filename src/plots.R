@@ -81,6 +81,17 @@ plot_temporal_network <- function(
   if (length(labels) != ncol(network)) {
     stop("labels must have one entry per node.")
   }
+  labels <- as.character(labels)
+  # Break long project symptom names at readable syllable boundaries.
+  syllable_breaks <- c(
+    concentration = "concen-\ntration",
+    worthlessness = "worth-\nlessness",
+    psychomotor = "psycho-\nmotor",
+    anhedonia = "anhe-\ndonia"
+  )
+  split_labels <- unname(syllable_breaks[tolower(labels)])
+  needs_break <- !is.na(split_labels) & !grepl("\\n", labels)
+  labels[needs_break] <- split_labels[needs_break]
 
   node_colors <- unname(symptom_colors[node_names])
   node_colors[is.na(node_colors)] <- "#E2E8F0"
@@ -129,25 +140,33 @@ plot_temporal_network <- function(
   # Match the app's fixed circular layout and edge styling.
   n_nodes <- ncol(network)
   theta <- pi / 2 - (seq_len(n_nodes) - 1) * 2 * pi / n_nodes
-  layout <- cbind(cos(theta), sin(theta))
+  # Scale the layout with the limits to preserve its size, with extra room
+  # around the loops and a slight downward shift.
+  layout <- 1.29 * cbind(cos(theta), sin(theta))
+  layout[, 2] <- layout[, 2] - 0.4
 
   old_par <- graphics::par(no.readonly = TRUE)
   on.exit(graphics::par(old_par), add = TRUE)
   # Leave room below the standalone plot for its explanatory notes.
   graphics::par(
     bg = "white", fg = "#20334A", family = "sans",
-    oma = c(5.5, 0, 0, 0)
+    oma = c(4.5, 0, 0, 0),
+    xpd = TRUE
   )
   plot(
     graph,
     layout = layout,
+    rescale = FALSE,
+    xlim = c(-1.55, 1.55),
+    ylim = c(-1.55, 1.55),
     main = title,
-    sub = subtitle,
     vertex.label = labels,
-    vertex.size = 34,
+    vertex.size = 54,
     vertex.color = node_colors,
     vertex.frame.color = "#7D8FA2",
     vertex.label.color = "#20334A",
+    vertex.label.family = "sans",
+    vertex.label.cex = 0.8,
     edge.color = edge_colors,
     edge.width = pmin(4, 0.8 + abs(weights) * 4),
     edge.arrow.size = 0.55,
@@ -155,22 +174,27 @@ plot_temporal_network <- function(
     edge.label = edge_labels,
     edge.label.color = "#65768A",
     edge.label.cex = 0.8,
-    margin = 0.25
+    margin = 0.1
+  )
+
+  graphics::mtext(
+    subtitle, side = 3, line = 0.5,
+    cex = 0.9, col = "#65768A"
   )
 
   graphics::mtext(
     "Teal: positive coefficient   |   Rose: negative coefficient",
-    side = 1, outer = TRUE, line = 1,
+    side = 1, outer = TRUE, line = 0.7,
     cex = 0.8, col = "#65768A"
   )
   graphics::mtext(
     "Thicker edges: larger absolute weights | Loops: autoregressive effects",
-    side = 1, outer = TRUE, line = 2.5,
+    side = 1, outer = TRUE, line = 2.0,
     cex = 0.75, col = "#65768A"
   )
   graphics::mtext(
     "Edge appearance does not indicate statistical evidence or uncertainty.",
-    side = 1, outer = TRUE, line = 4,
+    side = 1, outer = TRUE, line = 3.3,
     cex = 0.7, col = "#65768A"
   )
 
