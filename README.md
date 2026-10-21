@@ -23,7 +23,7 @@ The temporal network contains two types of relationships:
 - **Autoregressive edges:** Represent the persistence of a symptom from one measurement to the next.
 - **Cross-lagged edges:** Represent predictive relationships between different symptoms across consecutive measurements.
 
-We distinguish between group-level symptom dynamics, which describe temporal relationships across participants, and individual-level symptom dynamics, which describe relationships estimated for a particular participant. These patterns may differ, illustrating why group-level findings may not fully represent every individual.
+We distinguish between group-level symptom dynamics, which describe temporal relationships across participants, and individual-level symptom dynamics, which describe relationships estimated for a particular participant. These patterns may differ, illustrating why group-level findings may not fully represent every individual.This distinction has societal and clinical relevance because treatment approaches informed by group-level findings may not adequately reflect the symptom dynamics and needs of every individual. Understanding individual differences may therefore help highlight the limitations of generalising group-level findings to individual treatment needs and the potential value of more personalised approaches to mental health care.
 
 Temporal associations represent predictive relationships and should not automatically be interpreted as causal effects.
 
@@ -149,30 +149,15 @@ install.packages(c(
 
 Clone or download the repository from GitHub and open the project folder in RStudio.
 
-Run the following commands from the repository root, where the `src/` and `data/` directories are located.
+2. Run the Main Deliverable
 
-### 2. Generate the Simulated Data
+Ensure that the required packages are installed, then open main.Rmd in RStudio and knit the document.
 
-Run the simulation script:
+The main file is intended to run the project workflow from beginning to end, including generating the simulated dataset, conducting the statistical analysis, producing visualisations, and presenting the results and discussion.
 
-```r
-source("src/simulate_data.R")
-```
+The simulation script, src/simulate_data.R, generates daily symptom ratings and saves the dataset and rating-frequency table in the data/ directory. It should run before the analysis steps that depend on its output.
 
-This generates the simulated dataset in the R object `ema` and saves the following files:
-
-- `data/ema_simulated.csv`
-- `data/rating_frequencies.csv`
-
-The script uses a fixed random seed to support reproducibility.
-
-### 3. Run the Main Deliverable
-
-Open `main.Rmd` in RStudio and knit the document.
-
-The main deliverable should run from beginning to end, sourcing the required scripts and using the correct data paths. Install the required dependencies before knitting.
-
-### 4. Launch the Shiny Application
+### 3. Launch the Shiny Application
 
 From the repository root, run:
 
