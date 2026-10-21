@@ -74,6 +74,10 @@ edge_narrow <- extract_temporal(fit_p1_narrow)[
   extract_temporal(fit_p1_narrow)$predictor == "lag1_sleep" &
     extract_temporal(fit_p1_narrow)$outcome == "tired", ]
 
+edge_wide <- extract_temporal(fit_p1_wide)[
+  extract_temporal(fit_p1_wide)$predictor == "lag1_sleep" &
+    extract_temporal(fit_p1_wide)$outcome == "tired", ]
+
 # Compare posteriors in a table
 sensitivity_table <- rbind(
   data.frame(prior = "narrow (0.35)", edge_narrow),
@@ -97,9 +101,6 @@ bf_comparison <- data.frame(
   )
 )
 print(bf_comparison)
-edge_wide <- extract_temporal(fit_p1_wide)[
-  extract_temporal(fit_p1_wide)$predictor == "lag1_sleep" &
-    extract_temporal(fit_p1_wide)$outcome == "tired", ]
 
 # Overlay posterior plot using base R
 means  <- c(edge_narrow$mean, edge_original$mean, edge_wide$mean)
@@ -118,3 +119,5 @@ for (i in 1:3) {
   lines(c(i, i), c(q5s[i], q95s[i]), col = colors[i], lwd = 2)
 }
 legend("topright", legend = labels, col = colors, lwd = 2, pch = 19)
+
+
