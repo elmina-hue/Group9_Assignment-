@@ -80,8 +80,8 @@ sensitivity_table <- rbind(
   data.frame(prior = "original (0.50)", edge_original),
   data.frame(prior = "wide (0.65)", edge_wide)
 )
-sensitivity_table
-print(sensitivity_table[, c("prior", "mean", "median", "q5", "q95")])
+sensitivity_table = sensitivity_table[, c("prior", "mean", "median", "ci_lower", "ci_upper")]
+print(sensitivity_table)
 
 # BFs for sleep -> tired across all three models
 bf_original <- bf_table(fit_p1_original, type = "cl", variable = "sleep")
@@ -103,8 +103,8 @@ edge_wide <- extract_temporal(fit_p1_wide)[
 
 # Overlay posterior plot using base R
 means  <- c(edge_narrow$mean, edge_original$mean, edge_wide$mean)
-q5s    <- c(edge_narrow$q5,   edge_original$q5,   edge_wide$q5)
-q95s   <- c(edge_narrow$q95,  edge_original$q95,  edge_wide$q95)
+q5s    <- c(edge_narrow$ci_lower,   edge_original$ci_lower,   edge_wide$ci_lower)
+q95s   <- c(edge_narrow$ci_upper,  edge_original$ci_upper,  edge_wide$ci_upper)
 labels <- c("Narrow (0.35)", "Original (0.50)", "Wide (0.65)")
 colors <- c("steelblue", "black", "firebrick")
 
