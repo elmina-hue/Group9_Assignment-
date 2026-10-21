@@ -120,4 +120,26 @@ for (i in 1:3) {
 }
 legend("topright", legend = labels, col = colors, lwd = 2, pch = 19)
 
+#extracting posterior values for P1 and group for all edges
+draws_group <- extract_draws(fit_group, parameter = "phi")
+draws_group
+draws_p1 <- extract_draws(fit_p1, parameter = "phi")
+
+#extracting posterior values for P1 and group for the sleep -> tired edge
+group_sleep_tired <- draws_group[, "phi[3,2]"]
+p1_sleep_tired <- draws_p1[, "phi[3,2]"]
+p1_sleep_tired
+
+#computing the difference between P1 and group for the sleep -> tired edge
+delta_sleep_tired <- p1_sleep_tired - group_sleep_tired
+
+posterior_difference = c(
+  median_difference = median(delta_sleep_tired), mean = mean(delta_sleep_tired),
+  lower = quantile(delta_sleep_tired, 0.05),
+  upper = quantile(delta_sleep_tired, 0.95),
+  probability_p1_smaller = mean(delta_sleep_tired < 0),
+  probability_p1_larger = mean(delta_sleep_tired > 0)
+)
+posterior_difference
+
 
