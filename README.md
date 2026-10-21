@@ -46,7 +46,7 @@ The project aims to:
 
 The simulation generates daily symptom ratings for **25 simulated participants across 100 days per participant**.
 
-The nine symptom domains correspond to the PHQ-9:
+The nine symptom domains are based on the Patient Health Questionnaire-9 (PHQ-9; Kroenke et al., 2001), a validated measure of depression severity. The original questionnaire assesses nine symptoms over the previous two weeks, with response options scored from 0 to 3.
 
 - `down` — Depressed mood
 - `tired` — Fatigue or low energy
@@ -178,6 +178,8 @@ Temporal edges represent estimated predictive relationships between consecutive 
 ## References
 
 Borsboom, D., & Cramer, A. O. J. (2013). Network analysis: An integrative approach to the structure of psychopathology. *Annual Review of Clinical Psychology, 9*, 91–121. https://doi.org/10.1146/annurev-clinpsy-050212-185608
+
+Kroenke, K., Spitzer, R. L., & Williams, J. B. W. (2001). The PHQ-9: Validity of a brief depression severity measure. *Journal of General Internal Medicine, 16*(9), 606–613. https://doi.org/10.1046/j.1525-1497.2001.016009606.x
 
 Myin-Germeys, I., Kasanova, Z., Vaessen, T., Vachon, H., Kirtley, O., Viechtbauer, W., & Reininghaus, U. (2018). Experience sampling methodology in mental health research: New insights and technical developments. *World Psychiatry, 17*(2), 123–132. https://doi.org/10.1002/wps.20513
 
