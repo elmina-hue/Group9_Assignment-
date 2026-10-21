@@ -1,6 +1,6 @@
 # plots.R
 # Source this file, then call plot_temporal_network().
-# Requires the qgraph package. Sourcing does not draw a plot.
+# Requires the igraph package. Sourcing does not draw a plot.
 
 plot_temporal_network <- function(
   network,
@@ -16,17 +16,24 @@ plot_temporal_network <- function(
     sleep = "#D8EEE8",
     nervous = "#E7DFF4",
     worry = "#F4DDE5",
-    irritable = "#E8EDCF"
+    irritable = "#E8EDCF",
+    anhedonia = "#E7DFF4",
+    worthlessness = "#F4DDE5",
+    concentration = "#E8EDCF",
+    appetite = "#FAE6D3",
+    psychomotor = "#D8EEE8",
+    suicidal = "#F2D9DD"
   ),
   title = NULL,
   subtitle = NULL,
   extractor = NULL,
   transpose = FALSE,
-  maximum = NULL,
-  ...   #extra qgraph options; these can override the plotting defaults
+  threshold = 0.10,
+  show_loops = TRUE,
+  show_edge_labels = FALSE
 ) {
-  if (!requireNamespace("qgraph", quietly = TRUE)) {
-    stop("Install qgraph first: install.packages('qgraph')")
+  if (!requireNamespace("igraph", quietly = TRUE)) {
+    stop("Install igraph first: install.packages('igraph')")
   }
 
   level <- match.arg(level)
@@ -46,10 +53,20 @@ plot_temporal_network <- function(
   if (any(!is.finite(network))) {
     stop("network must contain only finite values (no NA, NaN, or Inf).")
   }
+  if (!is.numeric(threshold) || length(threshold) != 1L ||
+      !is.finite(threshold) || threshold < 0) {
+    stop("threshold must be one finite, non-negative number.")
+  }
+  if (!is.logical(show_loops) || length(show_loops) != 1L || is.na(show_loops)) {
+    stop("show_loops must be TRUE or FALSE.")
+  }
+  if (!is.logical(show_edge_labels) || length(show_edge_labels) != 1L ||
+      is.na(show_edge_labels)) {
+    stop("show_edge_labels must be TRUE or FALSE.")
+  }
 
-  # qgraph interprets entry [i, j] as an edge from node i to node j.
-  # bvarnet's extractor returns rows as lagged predictors and columns as
-  # outcomes, so use transpose = TRUE for its output.
+  # Rows are lagged predictors and columns are outcomes in bvarnet's matrix.
+  # Transpose only when a different extractor returns the reverse convention.
   if (transpose) network <- t(network)
 
   if (is.null(node_names)) node_names <- colnames(network)
@@ -60,10 +77,7 @@ plot_temporal_network <- function(
   if (length(node_names) != ncol(network)) {
     stop("node_names must have one entry per node, in matrix order.")
   }
-
-  if (is.null(labels)) {
-    labels <- tools::toTitleCase(gsub("_", " ", node_names))
-  }
+  if (is.null(labels)) labels <- node_names
   if (length(labels) != ncol(network)) {
     stop("labels must have one entry per node.")
   }
@@ -89,79 +103,76 @@ plot_temporal_network <- function(
     subtitle <- paste(scope, model, paste("Lag", lag), sep = " | ")
   }
 
+  # Hide coefficients smaller than the selected threshold; optionally hide loops.
+  shown <- network
+  shown[abs(shown) < threshold] <- 0
+  if (!show_loops) diag(shown) <- 0
+
+  graph <- igraph::graph_from_adjacency_matrix(
+    shown, mode = "directed", weighted = TRUE, diag = TRUE
+  )
+  weights <- igraph::E(graph)$weight
+  edge_base_colors <- ifelse(weights >= 0, "#0D9488", "#E11D48")
+  # Keep weaker edges lighter, as in the earlier qgraph version with fade = TRUE.
+  max_weight <- max(abs(network))
+  edge_alpha <- if (max_weight > 0) {
+    pmax(0.08, abs(weights) / max_weight)
+  } else {
+    rep(1, length(weights))
+  }
+  edge_rgb <- grDevices::col2rgb(edge_base_colors) / 255
+  edge_colors <- grDevices::rgb(
+    edge_rgb[1, ], edge_rgb[2, ], edge_rgb[3, ], alpha = edge_alpha
+  )
+  edge_labels <- if (show_edge_labels) sprintf("%.2f", weights) else NA
+
+  # Match the app's fixed circular layout and edge styling.
+  n_nodes <- ncol(network)
+  theta <- pi / 2 - (seq_len(n_nodes) - 1) * 2 * pi / n_nodes
+  layout <- cbind(cos(theta), sin(theta))
+
   old_par <- graphics::par(no.readonly = TRUE)
   on.exit(graphics::par(old_par), add = TRUE)
+  # Leave room below the standalone plot for its explanatory notes.
   graphics::par(
     bg = "white", fg = "#20334A", family = "sans",
-    oma = c(6, 0, 5, 0)
+    oma = c(5.5, 0, 0, 0)
+  )
+  plot(
+    graph,
+    layout = layout,
+    main = title,
+    sub = subtitle,
+    vertex.label = labels,
+    vertex.size = 34,
+    vertex.color = node_colors,
+    vertex.frame.color = "#7D8FA2",
+    vertex.label.color = "#20334A",
+    edge.color = edge_colors,
+    edge.width = pmin(4, 0.8 + abs(weights) * 4),
+    edge.arrow.size = 0.55,
+    edge.curved = 0.15,
+    edge.label = edge_labels,
+    edge.label.color = "#65768A",
+    edge.label.cex = 0.8,
+    margin = 0.25
   )
 
-  plot_args <- list(
-    input = network,
-    layout = "circle",
-    layoutScale = c(0.90, 0.95),
-    labels = labels,
-    shape = "circle",
-    color = node_colors,
-    borders = TRUE,
-    border.color = "#7D8FA2",
-    border.width = 1.5,
-    vsize = 10,
-    label.cex = 1.15,
-    label.scale = FALSE,
-    label.color = "#20334A",
-    directed = TRUE,
-    # Draw diagonal coefficients as self-loops (autoregressive effects).
-    diag = TRUE,
-    posCol = "#148A87",
-    negCol = "#C25773",
-    fade = TRUE,
-    minimum = 0,
-    esize = 7,
-    asize = 4,
-    curve = 0.2,
-    edge.labels = FALSE,
-    mar = c(4, 3, 4, 3)
-  )
-
-  # Set the same maximum in each plot to compare edge strengths on one scale.
-  if (!is.null(maximum)) plot_args$maximum <- maximum
-
-  # Named extra qgraph arguments override the defaults above, for example
-  # directed = FALSE or layout = "spring".
-  extra_args <- list(...)
-  if (length(extra_args)) {
-    if (is.null(names(extra_args)) ||
-        any(is.na(names(extra_args)) | names(extra_args) == "")) {
-      stop("All extra qgraph arguments in ... must be named.")
-    }
-    plot_args[names(extra_args)] <- extra_args
-  }
-
-  graph <- do.call(qgraph::qgraph, plot_args)
-
-  graphics::mtext(
-    title, side = 3, outer = TRUE, line = 2.5,
-    cex = 1.15, font = 2, col = "#20334A"
-  )
-  graphics::mtext(
-    subtitle, side = 3, outer = TRUE, line = 0.9,
-    cex = 0.9, col = "#65768A"
-  )
   graphics::mtext(
     "Teal: positive coefficient   |   Rose: negative coefficient",
-    side = 1, outer = TRUE, line = 1.5,
+    side = 1, outer = TRUE, line = 1,
     cex = 0.8, col = "#65768A"
   )
   graphics::mtext(
     "Thicker edges: larger absolute weights | Loops: autoregressive effects",
-    side = 1, outer = TRUE, line = 2.9,
+    side = 1, outer = TRUE, line = 2.5,
     cex = 0.75, col = "#65768A"
   )
   graphics::mtext(
     "Edge appearance does not indicate statistical evidence or uncertainty.",
-    side = 1, outer = TRUE, line = 4.3,
+    side = 1, outer = TRUE, line = 4,
     cex = 0.7, col = "#65768A"
   )
+
   invisible(graph)
 }
