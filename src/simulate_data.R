@@ -1,25 +1,30 @@
-
 # ============================================================
-# Simulate a multilevel EMA dataset
+# Simulate a multilevel daily symptom dataset based on PHQ-9 domains
 # ============================================================
-# Generate daily symptom ratings for 25 participants over 100 days.
-# The simulated data demonstrate how temporal symptom networks can
-# differ between a group and an individual. They are not real
-# participant or clinical data.
+# This is a daily EMA-style adaptation of the nine PHQ-9 symptom
+# domains, NOT the standard PHQ-9 administration, which asks about
+# symptoms over the previous two weeks.
 #
-# The coefficients are illustrative choices for this simulation.
-# They should not be interpreted as established empirical effects
-# unless supported by relevant research.
+# All coefficient values and cross-lagged relationships below are
+# illustrative simulation assumptions, not empirical estimates or
+# established clinical relationships.
+#
+# Run this script from the repository root. It creates:
+#   data/ema_simulated.csv
+#   data/rating_frequencies.csv
 
 set.seed(2026)  # Makes the simulation reproducible.
 
 N <- 25    # Number of participants
 Tt <- 100  # Number of days per participant
-p <- 6     # Number of symptoms
+p <- 9     # Number of symptom domains
 
+# Keep the first three variables in the same order as the colleague's
+# analysis code, which refers to sleep and tired by their indices.
 symptoms <- c(
   "down", "tired", "sleep",
-  "nervous", "worry", "irritable"
+  "anhedonia", "worthlessness", "concentration",
+  "appetite", "psychomotor", "suicidal"
 )
 
 # ============================================================
@@ -27,21 +32,16 @@ symptoms <- c(
 # ============================================================
 # Phi_group is the group-level VAR(1) coefficient matrix.
 #
-# Rows represent symptoms being predicted on day t.
-# Columns represent symptoms measured on the previous day (t - 1).
+# Rows represent the symptom being predicted on day t.
+# Columns represent the symptom measured on the previous day (t - 1).
+# Thus, Phi_group["down", "sleep"] is the coefficient for the
+# previous day's sleep domain predicting the next day's low mood,
+# conditional on the other symptoms in the model.
 #
-# For example, Phi_group["down", "sleep"] = 0.25 means that
-# previous-day sleep contributes positively to the prediction of
-# next-day low mood, conditional on the other symptoms in the model.
+# Diagonal entries are autoregressive (carry-over) coefficients.
+# Off-diagonal entries are cross-lagged relationships.
 #
-# Diagonal entries represent autoregressive (carry-over) effects:
-# how strongly each symptom predicts itself on the following day.
-#
-# Off-diagonal entries represent cross-lagged relationships between
-# different symptoms.
-#
-# The selected symptom pairs and coefficient values below are
-# illustrative. They are not claimed to be empirical estimates.
+# The chosen relationships and coefficient values are illustrative.
 
 Phi_group <- matrix(
   0,
@@ -53,25 +53,30 @@ Phi_group <- matrix(
 # Autoregressive carry-over coefficients, in symptom order.
 diag(Phi_group) <- c(
   0.30, 0.30, 0.35,
-  0.30, 0.35, 0.30
+  0.30, 0.35, 0.30,
+  0.30, 0.30, 0.30
 )
 
 # Illustrative cross-lagged relationships.
 Phi_group["down", "sleep"] <- 0.25
 Phi_group["down", "tired"] <- 0.15
-Phi_group["nervous", "worry"] <- 0.20
-Phi_group["worry", "nervous"] <- 0.15
-Phi_group["irritable", "worry"] <- 0.15
+Phi_group["anhedonia", "worthlessness"] <- 0.20
+Phi_group["worthlessness", "anhedonia"] <- 0.15
+Phi_group["concentration", "worthlessness"] <- 0.15
+
+# Additional illustrative links so all nine symptom domains are
+# connected in the overall network; not every pair has an effect.
+Phi_group["tired", "appetite"] <- 0.15
+Phi_group["tired", "psychomotor"] <- 0.15
+Phi_group["suicidal", "worthlessness"] <- 0.20
+Phi_group["down", "suicidal"] <- 0.15
 
 # ============================================================
 # 2. Define between-person variability
 # ============================================================
-# Tau specifies the standard deviation of the random deviation
-# added to each group-level coefficient for each participant.
-#
-# Larger values allow more variation between participants for
-# the corresponding temporal relationship.
-# These values are illustrative simulation settings.
+# Tau gives the standard deviation of participant-specific
+# deviations from each group-level coefficient.
+# These are illustrative simulation settings.
 
 Tau <- matrix(
   0.08,
@@ -82,32 +87,27 @@ Tau <- matrix(
 
 # Allow greater between-person variability for selected coefficients.
 Tau["down", "sleep"] <- 0.15
-Tau["nervous", "worry"] <- 0.15
+Tau["anhedonia", "worthlessness"] <- 0.15
 
 # ============================================================
 # 3. Check temporal stability
 # ============================================================
-# A VAR process is stable when the largest absolute eigenvalue
-# of its coefficient matrix is below 1.
-#
-# Here we use a stricter threshold of 0.95 to avoid matrices that
-# are too close to the stability boundary.
-#
-# The function returns TRUE if the matrix passes the check and
-# FALSE otherwise. Unstable matrices are redrawn in the loop below.
+# A VAR process is stable when the largest absolute eigenvalue of
+# its coefficient matrix is below 1. We use a stricter threshold
+# of 0.95 to avoid matrices close to the stability boundary.
 
 stationary <- function(M) {
   max(Mod(eigen(M, only.values = TRUE)$values)) < 0.95
 }
 
 # ============================================================
-# 4. Set the baseline and random innovation variability
+# 4. Set baseline and innovation variability
 # ============================================================
-# mu is the baseline level around which latent symptom values vary.
-# innov_sd controls the standard deviation of the random innovations
-# added at each time point.
+# The latent values are shifted by mu, rounded, then clipped to
+# the PHQ-9 item response range of 0 to 3.
+# This is a simplified ordinal-data simulation, not a threshold model.
 
-mu <- 2.5
+mu <- 1.5
 innov_sd <- 0.70
 
 # Store each participant's data separately before combining them.
@@ -116,82 +116,77 @@ long <- vector("list", N)
 # ============================================================
 # 5. Generate each participant's network and daily observations
 # ============================================================
-# Each participant receives their own coefficient matrix, Phi_i.
-# It is created by adding random deviations to the group matrix.
-# This allows the participants' temporal networks to differ.
+# Each participant receives a coefficient matrix Phi_i by adding
+# random deviations to Phi_group.
 #
 # Participant 1 is deliberately made different from the group:
 #   - sleep -> low mood is set to zero;
-#   - worry -> nervousness is strengthened;
-#   - nervousness -> irritability is added.
+#   - worthlessness -> anhedonia is strengthened;
+#   - anhedonia -> concentration is added/strengthened;
+#   - worthlessness -> suicidal thoughts is strengthened.
 #
-# These changes create an example of an individual network that
-# departs from the group network. They are design choices for the
-# demonstration, not estimates from real participant data.
+# These are designed examples of individual differences, not
+# estimates from real participant data.
 #
-# The repeat loop keeps generating a participant-specific matrix
-# until it passes the stability check.
+# Each matrix is redrawn until it passes the stability check.
 
 for (i in seq_len(N)) {
-  
+
   repeat {
-    
-    # Generate random coefficient deviations using Tau as the
-    # standard deviation for each corresponding matrix element.
+
+    # Draw one deviation for every matrix element, using Tau as
+    # the standard deviation for the corresponding coefficient.
     U <- matrix(
       rnorm(p * p, mean = 0, sd = as.vector(Tau)),
       nrow = p,
       ncol = p
     )
-    
-    # Combine the group-level coefficients with individual deviations.
+
+    # Add participant-specific deviations to the group coefficients.
     Phi_i <- Phi_group + U
-    
+
     # Apply the planned individual differences to Participant 1.
     if (i == 1) {
-      
       Phi_i["down", "sleep"] <- 0.00
-      Phi_i["nervous", "worry"] <- 0.45
-      Phi_i["irritable", "nervous"] <- 0.30
+      Phi_i["anhedonia", "worthlessness"] <- 0.45
+      Phi_i["concentration", "anhedonia"] <- 0.30
+      Phi_i["suicidal", "worthlessness"] <- 0.35
     }
-    
+
     # Accept this matrix only if it passes the stability check.
     if (stationary(Phi_i)) break
   }
-  
+
   # ----------------------------------------------------------
   # Simulate daily latent symptom values
   # ----------------------------------------------------------
-  # Y stores continuous values before conversion to 1–4 ratings.
-  # The first day is initialised using random noise.
-  # Each subsequent day depends on the previous day's values
-  # through the participant's coefficient matrix, plus new noise.
-  
+  # Y contains continuous latent values before conversion to ratings.
+  # The first day is initialised with random noise. Each following
+  # day depends on the previous day's symptoms plus new random noise.
+
   Y <- matrix(0, nrow = Tt, ncol = p)
-  
   Y[1, ] <- rnorm(p, mean = 0, sd = innov_sd)
-  
+
   for (t in 2:Tt) {
     Y[t, ] <- Phi_i %*% Y[t - 1, ] +
       rnorm(p, mean = 0, sd = innov_sd)
   }
-  
+
   # ----------------------------------------------------------
-  # Convert latent values to ratings between 1 and 4
+  # Convert latent values to PHQ-9-style item ratings (0 to 3)
   # ----------------------------------------------------------
-  # Keep the current rating-generation method:
-  #   1. Add the baseline mean.
-  #   2. Round to the nearest whole number.
-  #   3. Clip values below 1 to 1 and above 4 to 4.
+  # 1. Add the baseline mean.
+  # 2. Round to the nearest whole number.
+  # 3. Clip values below 0 to 0 and above 3 to 3.
   #
   # This is a simplified procedure and does not explicitly model
   # ordinal response thresholds.
-  
+
   obs <- round(mu + Y)
-  obs[obs < 1] <- 1
-  obs[obs > 4] <- 4
-  
-  # Save this participant's ID, day, and symptom ratings.
+  obs[obs < 0] <- 0
+  obs[obs > 3] <- 3
+
+  # Save participant ID, day, and the nine symptom-domain ratings.
   long[[i]] <- data.frame(
     id = i,
     day = 1:Tt,
@@ -202,59 +197,65 @@ for (i in seq_len(N)) {
 # ============================================================
 # 6. Combine all participants into one dataset
 # ============================================================
-# ema contains one row per participant-day, with columns for
-# participant ID, day, and the six symptom ratings.
+# ema has one row per participant-day, with columns for participant
+# ID, day, and the nine symptom-domain ratings.
 
 ema <- do.call(rbind, long)
 colnames(ema) <- c("id", "day", symptoms)
 
+# Basic checks: expected dimensions, variable names, and rating range.
+stopifnot(nrow(ema) == N * Tt)
+stopifnot(all(c("id", "day", symptoms) %in% names(ema)))
+stopifnot(all(as.matrix(ema[, symptoms]) %in% 0:3))
+
 # ============================================================
 # 7. Calculate the frequency of each rating
 # ============================================================
-# Count how often each possible rating (1, 2, 3, and 4) occurs
-# for each symptom across all participant-day observations.
-#
-# Including all four levels ensures that a rating with zero
-# occurrences is still shown in the table.
-#
+# Count ratings 0, 1, 2, and 3 for every symptom. Including all
+# levels ensures that ratings with zero occurrences still appear.
 # Proportions are calculated separately for each symptom.
 
 rating_frequencies <- do.call(
   rbind,
   lapply(symptoms, function(s) {
-    
+
     counts <- table(
-      factor(ema[[s]], levels = 1:4)
+      factor(ema[[s]], levels = 0:3)
     )
-    
+
     data.frame(
       symptom = s,
-      rating = 1:4,
+      rating = 0:3,
       count = as.integer(counts),
       proportion = as.integer(counts) / nrow(ema)
     )
   })
 )
 
-# Display the complete rating-frequency table in R.
 print(rating_frequencies)
 
-# Display only ratings at the lower and upper boundaries (1 and 4).
+# Display only the minimum (0) and maximum (3) ratings.
 boundary_frequencies <- rating_frequencies[
-  rating_frequencies$rating %in% c(1, 4),
+  rating_frequencies$rating %in% c(0, 3),
 ]
 
 print(boundary_frequencies)
 
+# Check that each symptom has exactly N * Tt ratings in total.
+ratings_per_symptom <- aggregate(
+  count ~ symptom,
+  data = rating_frequencies,
+  FUN = sum
+)
+stopifnot(all(ratings_per_symptom$count == N * Tt))
+
 # ============================================================
 # 8. Save the generated data and frequency table
 # ============================================================
-# The repository already contains a data/ folder.
-# Run this script from the repository root so these relative paths
-# point to that folder.
-#
-# write.csv() creates these CSV files if they do not exist yet
-# and overwrites them if they already exist.
+# These paths assume the script is run from the repository root.
+# The folder is created if it does not already exist.
+
+dir.create("data", showWarnings = FALSE, recursive = TRUE)
 
 write.csv(
   ema,
@@ -267,5 +268,4 @@ write.csv(
   "data/rating_frequencies.csv",
   row.names = FALSE
 )
-
 
