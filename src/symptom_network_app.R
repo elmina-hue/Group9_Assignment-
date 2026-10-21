@@ -12,28 +12,29 @@
 
 # Combined two-page Shiny app: participant data input and side-by-side networks.
 # Run from the project root with: shiny::runApp("symptom_network_app.R")
-# The group reference is fitted from data/group_symptoms.csv (or generated from
-# src/simulate_data.R) and cached in data/group_network.csv.
+# The group reference is fitted from the `ema` data frame created by
+# src/simulate_data.R and cached in src/data/group_network.csv.
 
 required_packages <- c("shiny", "bvarnet", "igraph", "readr")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace,
                                                 logical(1), quietly = TRUE)]
 if (length(missing_packages)) stop("Install required packages first: ", paste(missing_packages, collapse = ", "))
 
-symptoms <- c("down", "tired", "sleep", "nervous", "worry", "irritable")
+symptoms <- c("down", "tired", "sleep", "anhedonia", "worthlessness",
+              "concentration", "appetite", "psychomotor", "suicidal")
 
 #find the script's own location and locate project files
 script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 source_files <- vapply(sys.frames(), function(frame) if (!is.null(frame$ofile)) as.character(frame$ofile)[1] else "", character(1))
 source_files <- source_files[nzchar(source_files)]
 script_path <- if (length(script_arg)) sub("^--file=", "", script_arg[1]) else if (length(source_files)) tail(source_files, 1) else "symptom_network_app.R"
-project_root <- dirname(normalizePath(script_path, mustWork = FALSE))
-if (basename(project_root) != "group_project") project_root <- getwd()
-source(file.path(project_root, "Group9_Assignment--main", "src", "simulate_data.R"), local = TRUE)
+app_dir <- dirname(normalizePath(script_path, mustWork = FALSE))
+simulation_env <- new.env(parent = globalenv())
+source(file.path(app_dir, "simulate_data.R"), local = simulation_env)
+group_data <- simulation_env$ema
 
 #set expected file locations
-group_network_path <- file.path(project_root, "data", "group_network.csv") # group model's estimated network
-group_data_path <- file.path(project_root, "data", "group_symptoms.csv") # observations for group model
+group_network_path <- file.path(app_dir, "data", "group_network.csv") # group model's estimated network
 
 #check participant data; requires day column and symptom columns
 validate_symptom_data <- function(data) {
@@ -47,8 +48,8 @@ validate_symptom_data <- function(data) {
   if (nrow(data) < 30) stop("At least 30 consecutive daily observations are required.")
   if (any(diff(data$day) != 1)) stop("Days must be consecutive.")
   ratings <- as.matrix(data[symptoms])
-  if (any(ratings < 1 | ratings > 4)) stop("Ratings must be between 1 and 4.")
-  if (any(ratings != round(ratings))) stop("Ratings must be whole numbers from 1 to 4.")
+  if (any(ratings < 0 | ratings > 3)) stop("PHQ-9 ratings must be between 0 and 3.")
+  if (any(ratings != round(ratings))) stop("PHQ-9 ratings must be whole numbers from 0 to 3.")
   data
 }
 
@@ -56,7 +57,7 @@ validate_symptom_data <- function(data) {
 #reads saved network and checks that it contains all symptoms as row and column names
 read_network <- function(path) {
   x <- as.matrix(utils::read.csv(path, row.names = 1, check.names = FALSE))
-  if (!all(symptoms %in% rownames(x)) || !all(symptoms %in% colnames(x))) stop("Group network must label all six symptoms on rows and columns.")
+  if (!all(symptoms %in% rownames(x)) || !all(symptoms %in% colnames(x))) stop("Group network must label all nine PHQ-9 symptom domains on rows and columns.")
   x[symptoms, symptoms, drop = FALSE]
 }
 
@@ -67,10 +68,10 @@ fit_bvarnet <- function(...) tryCatch(bvarnet::bvar(...), error = function(e) {
   bvarnet::bvar(...)
 })
 
-#gets the group network when the app starts; if the group network and symptom csv are both missing, it generates group data - we can adjust this
+#gets the group network when the app starts, fitting it from the simulator's ema frame if no cached network exists
 prepare_group_reference <- function() {
   if (file.exists(group_network_path)) return(read_network(group_network_path))
-  d <- if (file.exists(group_data_path)) readr::read_csv(group_data_path, show_col_types = FALSE) else simulate_group_data()
+  d <- group_data
   required <- c("id", "day", symptoms)
   if (!all(required %in% names(d))) stop("Group data needs columns: ", paste(required, collapse = ", "))
   #sets Cauchy prior for temporal coefficients & normal prior for residual standard deviations
@@ -100,18 +101,11 @@ fit_person_network <- function(d) {
 # network matrix: rows->symptoms being predicted today; columns->symptoms used as a predictor yesterday.
 
 #generates example data using the group network as the data-generating pattern
-make_example_data <- function(group_matrix, n_days, seed) {
-  set.seed(seed)
-  phi <- group_matrix[symptoms, symptoms, drop = FALSE]
-  if (max(Mod(eigen(phi)$values)) >= 1) stop("Group network is not stationary; example data cannot be generated safely.")
-  y <- matrix(0, n_days, length(symptoms), dimnames = list(NULL, symptoms))
-  #generates each days symptom values from the previous day's values plus random noise
-  for (i in 2:n_days) y[i, ] <- phi %*% y[i - 1, ] + stats::rnorm(length(symptoms), 0, .7)
-  ratings <- matrix(pmin(4, pmax(1, round(2.5 + y))), nrow = n_days,
-                    ncol = length(symptoms), dimnames = list(NULL, symptoms))
-  cbind(data.frame(day = seq_len(n_days)), as.data.frame(ratings, check.names = FALSE))
+make_example_data <- function(person_id, n_days) {
+  d <- group_data[group_data$id == person_id, c("day", symptoms), drop = FALSE]
+  utils::head(d, n_days)
 }
-#results in data frame with day column and 6 symptom columns
+#returns one participant's simulated rows with a day column and nine symptom columns
 
 # Drawing the networks:
 #turns coefficient matrix into network diagram
@@ -120,7 +114,8 @@ draw_network <- function(A, title, threshold, loops, labels) {
   shown[abs(shown) < threshold] <- 0  #threshold = minimal abs coefficient to display
   if (!loops) diag(shown) <- 0  #loops - whether to show self-connections
   g <- igraph::graph_from_adjacency_matrix(t(shown), mode = "directed", weighted = TRUE, diag = TRUE) #converts matrix into graph
-  theta <- pi / 2 - (0:5) * 2 * pi / 6  #calculates 6 evenly spaced points around a circle, one for each symptom
+  n_symptoms <- length(symptoms)
+  theta <- pi / 2 - (0:(n_symptoms - 1)) * 2 * pi / n_symptoms  # evenly spaced points around a circle
   weights <- igraph::E(g)$weight  #gets coefficient attached to each edge in the graph
   graphics::par(mar = c(1, 1, 3, 1))
   #draws the graph:
@@ -145,14 +140,14 @@ ui <- shiny::fluidPage(
     #defines page one, participant data:
     shiny::tabPanel("1. Participant data", value = "input",
       shiny::radioButtons("source", "Choose participant data", inline = TRUE,
-        choices = c("Generate an example participant" = "example", "Upload a participant CSV" = "upload")),
+        choices = c("Use a simulated participant" = "example", "Upload a participant CSV" = "upload")),
       shiny::conditionalPanel("input.source == 'example'",
-        shiny::numericInput("days", "Daily observations", 60, min = 30, max = 365),
-        shiny::numericInput("seed", "Random seed", 1, min = 1, max = 999999),
+        shiny::selectInput("person_id", "Simulated participant", choices = seq_len(simulation_env$N), selected = 1),
+        shiny::numericInput("days", "Daily observations", 100, min = 30, max = simulation_env$Tt),
         shiny::actionButton("generate", "Generate and analyse")),
       shiny::conditionalPanel("input.source == 'upload'",
         shiny::fileInput("file", "Participant CSV", accept = ".csv"),
-        shiny::helpText("Required columns: day, down, tired, sleep, nervous, worry, irritable. One row per consecutive day; ratings 1–4."),
+        shiny::helpText("Required columns: day plus the nine PHQ-9 symptom domains (down, tired, sleep, anhedonia, worthlessness, concentration, appetite, psychomotor, suicidal). One row per consecutive day; ratings 0–3."),
         shiny::actionButton("analyse", "Analyse uploaded data")),
       shiny::verbatimTextOutput("status"), shiny::h4("Daily ratings (first 10 rows)"), shiny::tableOutput("preview")),
     #defines page two, comparing nerworks:
@@ -171,7 +166,7 @@ ui <- shiny::fluidPage(
 server <- function(input, output, session) {
   result <- shiny::eventReactive(input$generate + input$analyse, {  #eventReactive runs the analysis
     tryCatch({  #tryCatch captures errors so the app can show them as status message
-      d <- if (identical(input$source, "example")) make_example_data(group_network, input$days, input$seed) else {
+      d <- if (identical(input$source, "example")) make_example_data(as.integer(input$person_id), input$days) else {
         shiny::req(input$file); readr::read_csv(input$file$datapath, show_col_types = FALSE)
       }
       d <- validate_symptom_data(d)
@@ -184,7 +179,7 @@ server <- function(input, output, session) {
   output$counts <- shiny::renderText({ x <- result(); shiny::req(is.null(x$error)); sprintf("%d daily observations | %d consecutive transitions", nrow(x$data), nrow(x$data) - 1) })
   output$group_plot <- shiny::renderPlot({ draw_network(group_network, "Group network", input$threshold, input$loops, input$labels) })
   output$person_plot <- shiny::renderPlot({ x <- result(); shiny::req(is.null(x$error)); draw_network(x$individual, "Participant network", input$threshold, input$loops, input$labels) })
-  output$edges <- shiny::renderTable({  #makes 36-row table, one row for each directed pair of 6 symptoms
+  output$edges <- shiny::renderTable({  #makes one row for each directed pair of nine symptoms
     x <- result(); shiny::req(is.null(x$error))
     g <- as.data.frame(as.table(group_network), stringsAsFactors = FALSE); names(g) <- c("Outcome", "Previous-day symptom", "Group estimate")
     p <- as.data.frame(as.table(x$individual), stringsAsFactors = FALSE); names(p) <- c("Outcome", "Previous-day symptom", "Participant estimate")
