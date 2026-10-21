@@ -1,4 +1,4 @@
-ys <- c("down", "tired", "sleep", "nervous", "worry", "irritable")
+ys <- c("down", "tired", "sleep", "anhedonia", "worthlessness","concentration", "appetite", "psychomotor", "suicidal")
 pr <- set_priors(phi = prior(family = "cauchy", loc = 0, scale = 0.5), sd_u = prior(family = "normal", loc = 0, scale = 0.35))
 
 ## (1) GROUP-LEVEL multilevel VAR: random intercepts + random temporal effects
