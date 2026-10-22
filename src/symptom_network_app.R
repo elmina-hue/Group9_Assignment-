@@ -5,7 +5,7 @@
 # the group model at startup when no reusable posterior cache exists. The cache
 # stores the mean network and temporal-coefficient draws needed for edge
 # difference intervals. The mean network is also saved to data/group_network.csv.
-# Each arrow represents a lag-one
+# Each individual analysis fits a fresh participant model. Each arrow represents a lag-one
 # temporal association: a symptom on one day predicting another symptom the next
 # day. The example data are simulated; these associations do not prove causation.
 
@@ -125,8 +125,7 @@ prepare_group_reference <- function() {
   list(network = net, draws = draws, fit = fit)
 }
 
-# Fit the selected participant with the shared individual-level analysis
-# function. Return both the posterior mean network and the fitted model.
+# Fit a fresh individual-level model for the selected participant.
 fit_person_network <- function(d) {
   d <- validate_symptom_data(d)
   participant_data <- transform(d, id = 1)
@@ -139,7 +138,9 @@ fit_person_network <- function(d) {
   })
   fit <- analysis$fit_individual
   m <- bvarnet::extract_network_matrix(fit, stat = "mean")
-  list(network = m[symptoms, symptoms, drop = FALSE], fit = fit)
+  net <- m[symptoms, symptoms, drop = FALSE]
+  draws <- as.matrix(analysis_env$get_draws_p1(fit, parameter = "phi"))
+  list(network = net, draws = draws)
 }
 # bvarnet network matrices use rows for lagged predictors and columns for outcomes.
 
@@ -169,11 +170,13 @@ ui <- shiny::fluidPage(
       shiny::conditionalPanel("input.source == 'example'",
         shiny::selectInput("person_id", "Simulated participant", choices = seq_len(simulation_env$N), selected = 1),
         shiny::numericInput("days", "Daily observations", 100, min = 30, max = simulation_env$Tt),
-        shiny::actionButton("generate", "Generate and analyse")),
+        shiny::actionButton("generate", "Generate participant data"),
+        shiny::actionButton("analyse_example", "Analyse participant")),
       shiny::conditionalPanel("input.source == 'upload'",
         shiny::fileInput("file", "Participant CSV", accept = ".csv"),
         shiny::helpText("Required columns: day plus the nine PHQ-9 symptom domains (down, tired, sleep, anhedonia, worthlessness, concentration, appetite, psychomotor, suicidal). One row per consecutive day; ratings 0–3."),
-        shiny::actionButton("analyse", "Analyse uploaded data")),
+        shiny::actionButton("preview_upload", "Preview uploaded data"),
+        shiny::actionButton("analyse_upload", "Analyse uploaded data")),
       shiny::verbatimTextOutput("status"), shiny::h4("Daily ratings (first 10 rows)"), shiny::tableOutput("preview")),
     #defines page two, comparing nerworks:
     shiny::tabPanel("2. Compare networks", value = "networks",
@@ -189,20 +192,69 @@ ui <- shiny::fluidPage(
 # Connect the existing interface to the analysis. Model errors are returned to
 # the status message so they do not stop the Shiny session.
 server <- function(input, output, session) {
-  result <- shiny::eventReactive(input$generate + input$analyse, {  #eventReactive runs the analysis
-    tryCatch({  #tryCatch captures errors so the app can show them as status message
-      d <- if (identical(input$source, "example")) make_example_data(as.integer(input$person_id), input$days) else {
-        shiny::req(input$file); readr::read_csv(input$file$datapath, show_col_types = FALSE)
-      }
-      d <- validate_symptom_data(d)
-      person <- fit_person_network(d)
-      list(data = d, individual = person$network, fit = person$fit, error = NULL)
-    }, error = function(e) list(data = NULL, individual = NULL, error = conditionMessage(e)))
+  participant_data <- shiny::reactiveVal(NULL)
+  model_result <- shiny::reactiveVal(NULL)
+  status_message <- shiny::reactiveVal("Generate or preview participant data to begin.")
+
+  shiny::observeEvent(input$source, {
+    participant_data(NULL)
+    model_result(NULL)
+    status_message("Generate or preview participant data to begin.")
   }, ignoreInit = TRUE)
-  #filling in the interface:
-  output$status <- shiny::renderText({ x <- result(); if (is.null(x$error)) "Model fitted using the project’s Bayesian VAR approach." else paste("Could not analyse data:", x$error) })
-  output$preview <- shiny::renderTable({ x <- result(); shiny::req(is.null(x$error)); utils::head(x$data, 10) })
-  output$counts <- shiny::renderText({ x <- result(); shiny::req(is.null(x$error)); sprintf("%d daily observations | %d consecutive transitions", nrow(x$data), nrow(x$data) - 1) })
+
+  shiny::observeEvent(input$generate, {
+    tryCatch({
+      d <- make_example_data(as.integer(input$person_id), input$days)
+      participant_data(validate_symptom_data(d))
+      model_result(NULL)
+      status_message("Ratings are ready. Click Analyse participant to fit the model.")
+    }, error = function(e) {
+      participant_data(NULL)
+      status_message(paste("Could not generate data:", conditionMessage(e)))
+    })
+  })
+
+  shiny::observeEvent(input$preview_upload, {
+    tryCatch({
+      shiny::req(input$file)
+      d <- readr::read_csv(input$file$datapath, show_col_types = FALSE)
+      participant_data(validate_symptom_data(d))
+      model_result(NULL)
+      status_message("Ratings are ready. Click Analyse uploaded data to fit the model.")
+    }, error = function(e) {
+      participant_data(NULL)
+      status_message(paste("Could not load data:", conditionMessage(e)))
+    })
+  })
+
+  shiny::observeEvent(input$analyse_example + input$analyse_upload, {
+    d <- participant_data()
+    if (is.null(d)) {
+      status_message("Generate or preview participant data before analysis.")
+      return()
+    }
+    tryCatch({
+      person <- fit_person_network(d)
+      model_result(list(data = d, individual = person$network,
+                        draws = person$draws, error = NULL))
+      status_message("Model fitted using the project’s Bayesian VAR approach.")
+    }, error = function(e) {
+      model_result(list(error = conditionMessage(e)))
+      status_message(paste("Could not analyse data:", conditionMessage(e)))
+    })
+  })
+
+  output$status <- shiny::renderText(status_message())
+  output$preview <- shiny::renderTable({
+    d <- participant_data()
+    shiny::req(!is.null(d))
+    utils::head(d, 10)
+  })
+  output$counts <- shiny::renderText({
+    d <- participant_data()
+    shiny::req(!is.null(d))
+    sprintf("%d daily observations | %d consecutive transitions", nrow(d), nrow(d) - 1)
+  })
   output$group_plot <- shiny::renderPlot({
     plot_temporal_network(
       group_network, level = "group", title = "Group network", subtitle = "",
@@ -212,7 +264,7 @@ server <- function(input, output, session) {
     )
   })
   output$person_plot <- shiny::renderPlot({
-    x <- result(); shiny::req(is.null(x$error))
+    x <- model_result(); shiny::req(!is.null(x), is.null(x$error))
     plot_temporal_network(
       x$individual, level = "individual", title = "Participant network", subtitle = "",
       node_names = symptoms, threshold = input$threshold,
@@ -221,8 +273,8 @@ server <- function(input, output, session) {
     )
   })
   output$edges <- shiny::renderTable({  #one row per directed symptom pair
-    x <- result(); shiny::req(is.null(x$error))
-    person_draws <- analysis_env$get_draws_p1(x$fit, parameter = "phi")
+    x <- model_result(); shiny::req(!is.null(x), is.null(x$error))
+    person_draws <- x$draws
     n_draws <- min(nrow(group_draws), nrow(person_draws))
     if (n_draws < 1L) stop("The fitted models did not return posterior draws.")
     # The models retain different numbers of draws, so take equally sized sets
