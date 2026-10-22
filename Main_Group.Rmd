@@ -122,7 +122,7 @@ library(readr)
 
 ## 2. Simulate data
 
-**1) Set the simulation size**
+**1) Defining simulation parameters**
 
 Define the number of participants the data will be simulated on, as well
 as the amount of days data will be simulated for Also define the number
