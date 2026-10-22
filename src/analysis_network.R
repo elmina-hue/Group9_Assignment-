@@ -47,7 +47,7 @@ run_group_network <- function(ema, ys, pr,
   invisible(list(
     fit_group = fit_group,
     summary = model_summary,
-    random_effects = random_effects,
+    random_effects = random_effects
     # Extract random-effect information. Verify whether this function returns
     # participant deviations, their SDs, or both before interpreting the output
   ))
