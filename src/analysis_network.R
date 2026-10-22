@@ -1,4 +1,6 @@
 # 1. Group-level multilevel VAR -------------------------------------------
+# VAR: each symptom is predicted from earlier values of all model symptoms.
+# This model includes participant-specific intercepts and temporal effects.
 run_group_network <- function(ema, ys, pr,
                               iter = 4000, warmup = 1000,
                               chains = 4, cores = 4, seed = 2026) {
@@ -10,31 +12,50 @@ run_group_network <- function(ema, ys, pr,
   
   fit_group <- bvar(
     id_col = "id", time_col = "day", y_cols = ys,
+    # id_col identifies participants; time_col specifies time.
+    # y_cols identifies the outcome columns.
     x_cols = NULL, re_cols = c("Intercept"), re_temporal = TRUE,
+    # x_cols refers to additional covariates,so no additional covariates are added; 
+    # re_cols specifies which intercept or additional predictor effects are allowed to vary between participants,
+    # so random intercepts are enabled;
+    # re_temporal controls whether lagged symptom relationships can differ between participants,
+    # so random temporal coefficients are enabled across participants.
     K = 1, data = ema, family = "gaussian", priors = pr,
+    # K = 1 requests one lag; ema supplies all participants' data.
+    # Gaussian observation model; use the priors stored in pr.
+    # Verify whether lag 1 means the previous observed record or
+    # a fixed time interval when measurements have gaps.
     iter = iter, warmup = warmup, chains = chains,
     cores = cores, seed = seed
+    # Sampling settings: 4000 iterations and 1000 warmup for each chain
+    # four chains, up to four cores
+    # If iter includes warmup (a common convention), this yields
+    # 3000 retained draws per chain, or 12000 in total.
   )
   
   model_summary <- summary(fit_group)
   print(model_summary)
+  # Print the fitted-model summary; inspect estimates and sampling diagnostics.
+  # Rhat evaluates chain agreement; ESS is effective sample size.
+  # Confirm exactly which diagnostics summary() reports for this package.
   
   random_effects <- extract_random_effects(fit_group)
   print(random_effects)
-  
-  bayes_factors <- bf_table(fit_group, type = "temporal")
-  print(bayes_factors)
+  # Extract random-effect information. Verify whether this function returns
+  # participant deviations, their SDs, or both before interpreting the output.
   
   invisible(list(
     fit_group = fit_group,
     summary = model_summary,
     random_effects = random_effects,
-    bayes_factors = bayes_factors
+    # Extract random-effect information. Verify whether this function returns
+    # participant deviations, their SDs, or both before interpreting the output
   ))
 }
 
 
 # 2. Individual-level single-subject VAR ----------------------------------
+# Fit the VAR to Participant 1's data only.
 run_individual_network <- function(ema, ys, pr, participant_id = 1,
                                    iter = 4000, warmup = 1000,
                                    chains = 4, cores = 4, seed = 2026) {
@@ -57,8 +78,13 @@ run_individual_network <- function(ema, ys, pr, participant_id = 1,
   
   fit_individual <- bvar(
     id_col = "id", time_col = "day", y_cols = ys,
+    # Same identifying, time, and outcome columns as above.
     x_cols = NULL, re_cols = NULL, re_temporal = FALSE,
+    # No additional covariates or participant random effects.
+    # re_cols = NULL does not necessarily remove fixed intercepts.
     K = 1, data = individual_data, family = "gaussian", priors = pr,
+    # One lag, Participant 1's data, Gaussian observations,
+    # and the original prior specification.
     iter = iter, warmup = warmup, chains = chains,
     cores = cores, seed = seed
   )
@@ -76,22 +102,28 @@ run_individual_network <- function(ema, ys, pr, participant_id = 1,
     fit_individual = fit_individual,
     participant_id = participant_id,
     summary = model_summary,
+    # Display individual-model estimates and diagnostics.
     temporal = temporal,
+    # Extract a table of temporal-edge posterior summaries, not raw draws.
     bayes_factors = bayes_factors
+    # Request a table with all edges.
   ))
 }
 
 ###### SENSITIVITY ANALYSIS #############
 
 # 1. Original prior: Cauchy scale = 0.50 -----------------------------------
+# Re-create the original prior; this overwrites pr with the same specification.
 fit_original_model <- function(ema_p1, ys,
                                iter = 4000, warmup = 1000,
                                chains = 4, cores = 4, seed = 2026) {
   pr <- set_priors(
     phi = prior(family = "cauchy", loc = 0, scale = 0.50),
+    # Original temporal-coefficient prior, centered at zero.
     sd_u = prior(family = "normal", loc = 0, scale = 0.35)
+    # Hold the random-effect SD prior constant throughout this analysis.
   )
-  
+  # Refit Participant 1 with the original prior; other settings remain unchanged
   fit <- bvar(
     id_col = "id", time_col = "day", y_cols = ys,
     x_cols = NULL, re_cols = NULL, re_temporal = FALSE,
@@ -105,6 +137,7 @@ fit_original_model <- function(ema_p1, ys,
 
 
 # 2. Narrow prior: Cauchy scale = 0.35 -------------------------------------
+# Narrower temporal prior: more concentrated around zero than the original.
 fit_narrow_model <- function(ema_p1, ys,
                              iter = 4000, warmup = 1000,
                              chains = 4, cores = 4, seed = 2026) {
@@ -112,7 +145,7 @@ fit_narrow_model <- function(ema_p1, ys,
     phi = prior(family = "cauchy", loc = 0, scale = 0.35),
     sd_u = prior(family = "normal", loc = 0, scale = 0.35)
   )
-  
+  # Refit Participant 1 with a narrow temporal prior; other settings remain unchanged
   fit <- bvar(
     id_col = "id", time_col = "day", y_cols = ys,
     x_cols = NULL, re_cols = NULL, re_temporal = FALSE,
@@ -126,6 +159,7 @@ fit_narrow_model <- function(ema_p1, ys,
 
 
 # 3. Wide prior: Cauchy scale = 0.65 ---------------------------------------
+# Wider temporal prior: allows more prior mass at larger absolute coefficients
 fit_wide_model <- function(ema_p1, ys,
                            iter = 4000, warmup = 1000,
                            chains = 4, cores = 4, seed = 2026) {
@@ -133,7 +167,7 @@ fit_wide_model <- function(ema_p1, ys,
     phi = prior(family = "cauchy", loc = 0, scale = 0.65),
     sd_u = prior(family = "normal", loc = 0, scale = 0.35)
   )
-  
+  # Refit Participant 1 with the wider temporal prior; other settings remain unchanged.
   fit <- bvar(
     id_col = "id", time_col = "day", y_cols = ys,
     x_cols = NULL, re_cols = NULL, re_temporal = FALSE,
@@ -149,7 +183,7 @@ fit_wide_model <- function(ema_p1, ys,
 ### To assess if this is a treatment target, we must extract the temporal coefficient between these two nodes ###
 # Extract sleep -> tired edge across all three models
 
-
+#extract lag1sleep -> tired under the original model with scale = 0.5
 extract_original_temporal <- function(fit_p1_original,
                                       predictor = NULL, outcome = NULL) {
   coefficients <- extract_temporal(fit_p1_original)
@@ -175,7 +209,7 @@ extract_original_temporal <- function(fit_p1_original,
   return(coefficients)
 }
 
-
+#extract lag1sleep -> tired under the narrow model with scale = 0.35
 extract_narrow_temporal <- function(fit_p1_narrow,
                                     predictor = NULL, outcome = NULL) {
   coefficients <- extract_temporal(fit_p1_narrow)
@@ -201,7 +235,7 @@ extract_narrow_temporal <- function(fit_p1_narrow,
   return(coefficients)
 }
 
-
+#extract lag1sleep -> tired under the wide model with scale = 0.65
 extract_wide_temporal <- function(fit_p1_wide,
                                   predictor = NULL, outcome = NULL) {
   coefficients <- extract_temporal(fit_p1_wide)
@@ -228,13 +262,14 @@ extract_wide_temporal <- function(fit_p1_wide,
 }
 
 # Return posterior summaries for the three prior specifications.
+# Combine the edge summaries into one table.
 compare_posteriors <- function(edge_narrow, edge_original, edge_wide) {
   sensitivity_table <- rbind(
     data.frame(prior = "narrow (0.35)", edge_narrow),
     data.frame(prior = "original (0.50)", edge_original),
     data.frame(prior = "wide (0.65)", edge_wide)
   )
-  
+  # Keep all rows but only these five columns, in the specified order.
   sensitivity_table <- sensitivity_table[
     , c("prior", "mean", "median", "ci_lower", "ci_upper"),
     drop = FALSE
@@ -245,6 +280,8 @@ compare_posteriors <- function(edge_narrow, edge_original, edge_wide) {
 }
 
 # Return Bayes factors for sleep -> tired across the three models.
+# Ho represents the hypothesis that the edge equals 0
+# H1 represents the hypothesis that the edge differs from 0
 # The package or script providing bf_table() must already be loaded.
 prior_labels <- c("narrow (0.35)", "original (0.50)", "wide (0.65)")
 compare_bayes_factors <- function(fit_p1_narrow, fit_p1_original, fit_p1_wide,
@@ -269,6 +306,7 @@ compare_bayes_factors <- function(fit_p1_narrow, fit_p1_original, fit_p1_wide,
     
     return(as.numeric(bf$BF10[selected]))
   }, numeric(1))
+  # BF10 conventionally denotes evidence for H1 relative to H0.
   return(data.frame(prior = prior_labels, BF10 = bf_values))
 }
 
