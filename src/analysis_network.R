@@ -7,9 +7,7 @@ fit_group <- bvar(id_col = "id", time_col = "day", y_cols = ys,
                   K = 1, data = ema, family = "gaussian", priors = pr,
                   iter = 4000, warmup = 1000, chains = 4, cores = 4, seed = 2026)
 summary(fit_group) # fixed effects, random-effect SDs, Rhat, ESS
-qgraph(extract_network_matrix(fit_group)) # group-level temporal network
 extract_random_effects(fit_group) # between-person SD of each edge
-bf_table(fit_group, type = "temporal") # Bayes factors for the edges
 
 ## (2) IDIOGRAPHIC single-subject VAR for Participant 1
 ema_p1 <- subset(ema, id == 1)
@@ -18,9 +16,7 @@ fit_p1 <- bvar(id_col = "id", time_col = "day", y_cols = ys,
                K = 1, data = ema_p1, family = "gaussian", priors = pr,
                iter = 4000, warmup = 1000, chains = 4, cores = 4, seed = 2026)
 summary(fit_p1)
-qgraph(extract_network_matrix(fit_p1))
 extract_temporal(fit_p1) # posterior means + intervals per edge
-bf_table(fit_p1, type = "cl", variable = "sleep")
 bf_table(fit_p1, type = "cl")
 
 ###### SENSITIVITY ANALYSIS #############
