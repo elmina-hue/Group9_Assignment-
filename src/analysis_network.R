@@ -1,7 +1,3 @@
-# Load necessary packages
-install.packages("bvarnet")
-library(bvarnet)
-
 # 1. Group-level multilevel VAR -------------------------------------------
 # VAR: each symptom is predicted from earlier values of all model symptoms.
 # This model includes participant-specific intercepts and temporal effects.
