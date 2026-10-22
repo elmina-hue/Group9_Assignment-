@@ -186,7 +186,8 @@ ui <- shiny::fluidPage(
       shiny::p("Teal: positive | Rose: negative | Arrow: yesterday’s predictor → today’s outcome | Self-loop: carry-over"),
       shiny::sliderInput("threshold", "Minimum displayed absolute coefficient", min = 0, max = .5, value = 0, step = .01),
       shiny::checkboxInput("loops", "Show self-loops", TRUE), shiny::checkboxInput("labels", "Show edge values", TRUE),
-      shiny::h4("Edge estimates"), shiny::tableOutput("edges")))
+      shiny::h4("Edge estimates"), shiny::uiOutput("edges"),
+      shiny::p("Bold 90% intervals exclude zero, indicating a participant–group difference.")))
 )
 
 # Connect the existing interface to the analysis. Model errors are returned to
@@ -234,10 +235,19 @@ server <- function(input, output, session) {
       return()
     }
     tryCatch({
-      person <- fit_person_network(d)
+      status_message("Fitting individual model…")
+      person <- shiny::withProgress(
+        message = "Fitting individual model…",
+        detail = "Sampling the participant-level VAR. This may take a few minutes.",
+        value = 0,
+        {
+          fit_person_network(d)
+        }
+      )
       model_result(list(data = d, individual = person$network,
                         draws = person$draws, error = NULL))
-      status_message("Model fitted using the project’s Bayesian VAR approach.")
+      status_message("Analysis complete. Showing the network comparison.")
+      shiny::updateTabsetPanel(session, "pages", selected = "networks")
     }, error = function(e) {
       model_result(list(error = conditionMessage(e)))
       status_message(paste("Could not analyse data:", conditionMessage(e)))
@@ -272,7 +282,7 @@ server <- function(input, output, session) {
       show_notes = FALSE
     )
   })
-  output$edges <- shiny::renderTable({  #one row per directed symptom pair
+  output$edges <- shiny::renderUI({  #one row per directed symptom pair
     x <- model_result(); shiny::req(!is.null(x), is.null(x$error))
     person_draws <- x$draws
     n_draws <- min(nrow(group_draws), nrow(person_draws))
@@ -304,8 +314,27 @@ server <- function(input, output, session) {
       )
     }
     z <- do.call(rbind, rows)
-    z[order(-abs(z$Difference)), ]
-  }, digits = 3)
+    z <- z[order(-abs(z$Difference)), , drop = FALSE]
+    excludes_zero <- z[["90% CI lower"]] > 0 | z[["90% CI upper"]] < 0
+    interval_columns <- match(c("90% CI lower", "90% CI upper"), names(z))
+    body_rows <- lapply(seq_len(nrow(z)), function(i) {
+      cells <- lapply(seq_along(z), function(j) {
+        value <- z[[j]][i]
+        formatted <- if (is.numeric(z[[j]])) sprintf("%.3f", value) else as.character(value)
+        if (j %in% interval_columns && excludes_zero[i]) {
+          shiny::tags$td(shiny::tags$strong(formatted))
+        } else {
+          shiny::tags$td(formatted)
+        }
+      })
+      do.call(shiny::tags$tr, cells)
+    })
+    shiny::tags$table(
+      class = "table table-striped",
+      shiny::tags$thead(shiny::tags$tr(lapply(names(z), shiny::tags$th))),
+      do.call(shiny::tags$tbody, body_rows)
+    )
+  })
 }
 
 # Starting the app:
