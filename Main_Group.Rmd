@@ -237,6 +237,28 @@ plot_temporal_network(
 )
 ```
 
+In this chunk we store the group-network into a cache. This is done to save time from having to run the group-level network model again later on in the app
+
+```{r}
+group_network <- bvarnet::extract_network_matrix(
+  group_results$fit_group,
+  stat = "mean"
+)
+group_network <- group_network[ys, ys, drop = FALSE]
+
+group_draws <- get_draws_p1(
+  group_results$fit_group,
+  parameter = "phi"
+)
+
+dir.create("src/data", recursive = TRUE, showWarnings = FALSE)
+saveRDS(
+  list(network = group_network, draws = group_draws),
+  "src/data/group_posterior_cache.rds"
+)
+```
+
+
 **3) Creating the inidividual-level VAR network**
 
 Here we subset the first participant from the whole dataset of all 25 participants. The first participant is used to estimate the individual-level network
