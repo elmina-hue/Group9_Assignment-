@@ -329,3 +329,11 @@ delta_sleep_tired <- get_delta(p1_sleep_tired, group_sleep_tired)
 posterior_difference <- get_posterior_difference(delta_sleep_tired)
 print(posterior_difference)
 ```
+
+## 4. Run the app
+
+```{r}
+
+
+
+```
