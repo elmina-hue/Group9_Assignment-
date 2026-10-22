@@ -14,8 +14,12 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This file provides an example how a Bayesian VAR network analysis for
 depression would work. It also provides an app in which users can
-compare the networks between a group of individuals and an individual
-from that group. This allows
+compare the networks between a group of individuals and another individual. This
+comparison is clinically relevant because treatment approaches are often informed
+by findings at the group level, but those findings may not capture the symptom dynamics
+of a particular person. Examining where individual networks differ can help show
+the limits of applying group-level insights to individual treatment needs and motivate
+ more personalized approaches.
 
 The document proceeds as follows:
 
@@ -23,7 +27,7 @@ The document proceeds as follows:
     VAR network are simulated based on many individuals' data
 
 2.  Analysis: A sensitivity analysis is conducted, after which the edge
-    of interest (sleep_lag1 -\> tired) under each model is extracted.
+    of interest (sleep_lag1 -> tired) under each model is extracted.
     Then a plot showing how P1’s estimated sleep → tired coefficient
     changes across three prior settings is given. It is a
     prior-sensitivity plot. Finally, the differences between the group
