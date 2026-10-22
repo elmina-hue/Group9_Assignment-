@@ -139,7 +139,8 @@ Phi_group["suicidal", "worthlessness"] <- 0.20
 Phi_group["down", "suicidal"] <- 0.15
 ```
 
-All the above together consitute the temporal matrix and which all further analyses will be made on
+All the above together consitute the temporal matrix and which all
+further analyses will be made on
 
 **2) Define between-person variability**
 
@@ -167,8 +168,8 @@ Tau["anhedonia", "worthlessness"] <- 0.15
 
 This code checks whether a temproal coefficient matrix produces stable
 dynamics A VAR process is stable when the largest absolute eigenvalue of
-its coefficient matrix is below 1. We use a stricter threshold of 0.95 to
-avoid matrices close to the stability boundary (Lütkepohl, H. (2005))
+its coefficient matrix is below 1. We use a stricter threshold of 0.95
+to avoid matrices close to the stability boundary (Lütkepohl, H. (2005))
 
 ```{r temporal stability}
 stationary <- function(M) {
@@ -533,8 +534,8 @@ plot_prior_sensitivity(edge_narrow, edge_original, edge_wide)
 estimates, calculate the 90% CI around the difference score**
 
 ```{r posterior difference and equivalent 90% CI}
-draws_p1 <- get_draws_p1(fit_p1)
-draws_group <- get_draws_p1(fit_group)
+draws_p1 <- get_draws_p1(fit_p1_original)
+draws_group <- get_draws_p1(group_results$fit_group)
 
 p1_sleep_tired <- get_p1_sleep_tired(draws_p1)
 group_sleep_tired <- get_p1_sleep_tired(draws_group)
