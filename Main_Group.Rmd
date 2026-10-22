@@ -27,7 +27,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 All source code is loaded from the "src" folder. This document exposes the high-level interfaces we need
 
-```{r}
+```{r source files}
 if (!requireNamespace("knitr", quietly = TRUE)) {
   install.packages("knitr", repos = "https://cloud.r-project.org")
 }
@@ -42,7 +42,7 @@ source("app.R")
 
 Load the necessary packages to run the project
 
-```{r}
+```{r packages}
 install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
 cmdstanr::check_cmdstan_toolchain(fix = TRUE)
 cmdstanr::install_cmdstan(cores = 2,overwrite=TRUE)
@@ -67,7 +67,7 @@ library(readr)
 
 **1) Set the simulation size**
 
-```{r}
+```{r simulation}
 set.seed(2026)  
 
 N <- 25    
@@ -224,7 +224,7 @@ MCMC is a method for approximating the range of plausible parameter values given
 
 **2) Creating the group-level VAR network**
 
-```{r}
+```{r group network}
 group_results <- run_group_network(ema = ema, ys = ys, pr = pr)
 plot_temporal_network(
   network = group_results$fit_group,
@@ -241,7 +241,7 @@ plot_temporal_network(
 
 Here we subset the first participant from the whole dataset of all 25 participants. The first participant is used to estimate the individual-level network
 
-```{r}
+```{r individual network}
 ema_p1 <- subset(ema, id == 1)
 individual_results <- run_individual_network(ema = ema, ys = ys, pr = pr, participant_id = 1)
 plot_temporal_network(
@@ -260,7 +260,7 @@ A sensitivity analysis is conducted. We conduct a sensitivity analysis to check 
 
 The sensitivity analysis will include the original prior with a scale of 0.5. Two more priors with a scale of 0.35 and 0.65 will be included accordingly. The scale values were chosen since they have the same absolute distance from the original prior scale (scale = 0.5)
 
-```{r}
+```{r sensitivity analysis}
 fit_p1_original <- fit_original_model(ema_p1 = ema_p1, ys = ys)
 fit_p1_narrow   <- fit_narrow_model(ema_p1 = ema_p1, ys = ys)
 fit_p1_wide     <- fit_wide_model(ema_p1 = ema_p1, ys = ys)
@@ -274,7 +274,7 @@ The rest of the analysis will be interested in one specific edge: sleep problems
 
 **5) Extract the edge of interest for each of the 3 fitted models**
 
-```{r}
+```{r extract edges from each model}
 edge_original <- extract_original_temporal(
 fit_p1_original, predictor = "sleep", outcome = "tired")
 edge_narrow <- extract_narrow_temporal(
@@ -291,7 +291,7 @@ print(edge_wide)
 
 First a sensitivity table is created: Each edge under each model is given along with its equivalent 90% CI. This checks whether the estimated effect changes when you use different prior scales.
 
-```{r}
+```{r sensitivity table}
 sensitivity_table <- compare_posteriors(
 edge_narrow = edge_narrow,
 edge_original = edge_original,
@@ -302,7 +302,7 @@ print(sensitivity_table)
 This is a table showcasing the BF for each lag1sleep -> tired edge under each model
 The Bayes Factor for each of the 3 models is quantified. Bayes factors quantify the relative evidence for two competing hypotheses by comparing how well each predicts the observed data (Kass & Raftery, 1995). In this case, Hypothesis 1 (H1) represents the hypothesis that the temporal edge is different from 0 Hypothesis 0 (Ho) represents the hypothesis that the temporal edge is equal to 0
 
-```{r}
+```{r comparison of Bayes Factor's}
 bf_comparison <- compare_bayes_factors(
 fit_p1_narrow = fit_p1_narrow,
 fit_p1_original = fit_p1_original,
@@ -312,13 +312,13 @@ print(bf_comparison)
 
 plot the lag1sleep -> tired edges and their 90% CI under each of the 3 models
 
-```{r}
+```{r prior sensitivity plot}
 plot_prior_sensitivity(edge_narrow, edge_original, edge_wide)
 ```
 
 **7) Calculate the posterior difference between group and individual estimates, calculate the 90% CI around the difference score**
 
-```{r}
+```{r posterior difference and equivalent 90% CI}
 draws_p1 <- get_draws_p1(fit_p1)
 draws_group <- get_draws_p1(fit_group)
 
@@ -332,7 +332,7 @@ print(posterior_difference)
 
 ## 4. Run the app
 
-```{r}
+```{r app`}
 
 
 
