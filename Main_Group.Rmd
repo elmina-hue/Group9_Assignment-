@@ -488,9 +488,10 @@ fit_p1_narrow, predictor = "sleep", outcome = "tired")
 edge_wide <- extract_wide_temporal(
 fit_p1_wide, predictor = "sleep", outcome = "tired")
 
-print(edge_original)
-print(edge_narrow)
-print(edge_wide)
+print(rbind(
+  "Original_prior" = edge_original, 
+  "Narrow_prior" = edge_narrow, 
+  "Wide_prior" = edge_wide)))
 ```
 
 **6) Compare the posterior edges and their 90% Confidence Intervals**
