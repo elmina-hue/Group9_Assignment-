@@ -87,7 +87,7 @@ Define the number of participants the data will be simulated on, as well
 as the amount of days data will be simulated for Also define the number
 of symptoms and what these symptoms are (based on the PHQ-9)
 
-```{r simulation}
+```{r simulation size}
 set.seed(2026) 
 
 N <- 25    
@@ -108,7 +108,7 @@ the carry-over effects are defined. These represent how strongly a
 symptom today predicts itself tomorrow, and are represented on the
 diagonal of the matrix
 
-```{r}
+```{r edges}
 Phi_group <- matrix(
   0,
   nrow = p,
@@ -127,7 +127,7 @@ Then the cross-over effects are defined. These represent how strongly
 one symptom today predicts **another symptom** tomorrow, and are
 represented by all other values (excluding the diagonal) on the matrix
 
-```{r}
+```{r temporal matrix}
 Phi_group["down", "sleep"] <- 0.25
 Phi_group["down", "tired"] <- 0.15
 Phi_group["anhedonia", "worthlessness"] <- 0.20
@@ -139,13 +139,15 @@ Phi_group["suicidal", "worthlessness"] <- 0.20
 Phi_group["down", "suicidal"] <- 0.15
 ```
 
+All the above together consitute the temporal matrix and which all further analyses will be made on
+
 **2) Define between-person variability**
 
 Tau gives the standard deviation of participant-specific deviations from
 each group-level coefficient. These are illustrative simulation
 settings.
 
-```{r}
+```{r between-person variability}
 Tau <- matrix(
   0.08,
   nrow = p,
@@ -155,9 +157,8 @@ Tau <- matrix(
 ```
 
 For selected coefficients, we allow greater between-person variability
-for selected coefficients.
 
-```{r}
+```{r selected coefficients}
 Tau["down", "sleep"] <- 0.15
 Tau["anhedonia", "worthlessness"] <- 0.15
 ```
@@ -169,7 +170,7 @@ dynamics A VAR process is stable when the largest absolute eigenvalue of
 its coefficient matrix is below 1. We use a stricter thresholdof 0.95 to
 avoid matrices close to the stability boundary.
 
-```{r}
+```{r temporal stability}
 stationary <- function(M) {
   max(Mod(eigen(M, only.values = TRUE)$values)) < 0.95
 }
@@ -183,7 +184,7 @@ then clipped to the PHQ-9 item response range of 0 to 3. It stores each
 participant's data separately before combining them (long variable) This
 is a simplified ordinal-data simulation, not a threshold model.
 
-```{r}
+```{r baseline noise}
 mu <- 1.5
 innov_sd <- 0.70
 
@@ -207,7 +208,7 @@ Each matrix is redrawn until it passes the stability check.
 The chunk of code also includes step-by-step explanations for what the
 code does
 
-```{r}
+```{r generate participant's network}
 for (i in seq_len(N)) {
 
   repeat {
@@ -281,7 +282,7 @@ its basic structure.
 ema has one row per participant-day, with columns for participant ID,
 day, and the nine symptom-domain ratings.
 
-```{r}
+```{r combined dataset}
 ema <- do.call(rbind, long)
 colnames(ema) <- c("id", "day", symptoms)
 
@@ -302,7 +303,7 @@ appear.
 
 Proportions are calculated separately for each symptom.
 
-```{r}
+```{r frequency and proportions of each rating}
 rating_frequencies <- do.call(
   rbind,
   lapply(symptoms, function(s) {
@@ -347,7 +348,7 @@ These paths assume the script is run from the repository root.
 
 The folder is created if it does not already exist.
 
-```{r}
+```{r save csv file}
 dir.create("data", showWarnings = FALSE, recursive = TRUE)
 
 write.csv(
