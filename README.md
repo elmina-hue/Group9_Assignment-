@@ -149,7 +149,7 @@ install.packages(c(
 
 Clone or download the repository from GitHub and open the project folder in RStudio.
 
-2. Run the Main Deliverable
+### 2. Run the Main Deliverable
 
 Ensure that the required packages are installed, then open main.Rmd in RStudio and knit the document.
 
