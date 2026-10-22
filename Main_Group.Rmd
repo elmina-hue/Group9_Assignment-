@@ -167,8 +167,8 @@ Tau["anhedonia", "worthlessness"] <- 0.15
 
 This code checks whether a temproal coefficient matrix produces stable
 dynamics A VAR process is stable when the largest absolute eigenvalue of
-its coefficient matrix is below 1. We use a stricter thresholdof 0.95 to
-avoid matrices close to the stability boundary.
+its coefficient matrix is below 1. We use a stricter threshold of 0.95 to
+avoid matrices close to the stability boundary (Lütkepohl, H. (2005))
 
 ```{r temporal stability}
 stationary <- function(M) {
