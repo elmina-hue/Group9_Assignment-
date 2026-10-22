@@ -204,3 +204,128 @@ write.csv(
 )
 
 ```
+
+## 3. Run the analysis
+
+**1) Defining the symptoms and the prior**
+
+First, the symptoms based on the PHQ-9 are defined.
+
+Then, the prior model on which the VAR networks will be fitted is defined. A zero-centered Cauchy prior was used for temporal coefficients to regularize effects while allowing larger values (Gelman et al., 2008). Between-person standard deviations were assigned a normal prior restricted to non-negative values, reflecting a preference for smaller heterogeneity.
+
+```{r}
+ys <- c("down", "tired", "sleep", "anhedonia", "worthlessness", "concentration","appetite", "psychomotor", "suicidal")
+pr <- set_priors(phi = prior(family = "cauchy", loc = 0, scale = 0.5), sd_u = prior(family = "normal", loc = 0, scale = 0.35))
+```
+
+A Markov Chain Monte Carlo (MCMC) was used to estimate both the group-level networks and the individual level-network
+
+MCMC is a method for approximating the range of plausible parameter values given your data and model. It repeatedly samples possible values, moving from one set of values to another. Once the sampling has converged, these samples can be used to estimate parameters and describe uncertainty (van Ravenzwaaij et al., 2018).
+
+**2) Creating the group-level VAR network**
+
+```{r}
+group_results <- run_group_network(ema = ema, ys = ys, pr = pr)
+plot_temporal_network(
+  network = group_results$fit_group,
+  extractor = function(fit) {
+    bvarnet::extract_network_matrix(fit, stat = "mean")
+  },
+  level = "group",
+  node_names = ys,
+  transpose = TRUE
+)
+```
+
+**3) Creating the inidividual-level VAR network**
+
+Here we subset the first participant from the whole dataset of all 25 participants. The first participant is used to estimate the individual-level network
+
+```{r}
+ema_p1 <- subset(ema, id == 1)
+individual_results <- run_individual_network(ema = ema, ys = ys, pr = pr, participant_id = 1)
+plot_temporal_network(
+  network = individual_results$fit_individual,
+  extractor = bvarnet::extract_network_matrix,
+  level = "individual",
+  participant = 1,
+  node_names = ys,
+  transpose = TRUE
+)
+```
+
+**4) Conduct a sensitivity analysis**
+
+A sensitivity analysis is conducted. We conduct a sensitivity analysis to check whether the conclusions depend strongly on our choice of prior.
+
+The sensitivity analysis will include the original prior with a scale of 0.5. Two more priors with a scale of 0.35 and 0.65 will be included accordingly. The scale values were chosen since they have the same absolute distance from the original prior scale (scale = 0.5)
+
+```{r}
+fit_p1_original <- fit_original_model(ema_p1 = ema_p1, ys = ys)
+fit_p1_narrow   <- fit_narrow_model(ema_p1 = ema_p1, ys = ys)
+fit_p1_wide     <- fit_wide_model(ema_p1 = ema_p1, ys = ys)
+
+summary(fit_p1_original)
+summary(fit_p1_narrow)
+summary(fit_p1_wide)
+```
+
+The rest of the analysis will be interested in one specific edge: sleep problems and associated fatigue are core symptoms of depression: they strongly predict all other core symptoms and they persist even after mood symptoms have improved (Nutt et al., 2008). This complicates recovery and quality of life, and also predicts possible relapses.
+
+**5) Extract the edge of interest for each of the 3 fitted models**
+
+```{r}
+edge_original <- extract_original_temporal(
+fit_p1_original, predictor = "sleep", outcome = "tired")
+edge_narrow <- extract_narrow_temporal(
+fit_p1_narrow, predictor = "sleep", outcome = "tired")
+edge_wide <- extract_wide_temporal(
+fit_p1_wide, predictor = "sleep", outcome = "tired")
+
+print(edge_original)
+print(edge_narrow)
+print(edge_wide)
+```
+
+**6) Compare the posterior edges and their 90% Confidence Intervals**
+
+First a sensitivity table is created: Each edge under each model is given along with its equivalent 90% CI. This checks whether the estimated effect changes when you use different prior scales.
+
+```{r}
+sensitivity_table <- compare_posteriors(
+edge_narrow = edge_narrow,
+edge_original = edge_original,
+edge_wide = edge_wide)
+print(sensitivity_table)
+```
+
+This is a table showcasing the BF for each lag1sleep -> tired edge under each model
+The Bayes Factor for each of the 3 models is quantified. Bayes factors quantify the relative evidence for two competing hypotheses by comparing how well each predicts the observed data (Kass & Raftery, 1995). In this case, Hypothesis 1 (H1) represents the hypothesis that the temporal edge is different from 0 Hypothesis 0 (Ho) represents the hypothesis that the temporal edge is equal to 0
+
+```{r}
+bf_comparison <- compare_bayes_factors(
+fit_p1_narrow = fit_p1_narrow,
+fit_p1_original = fit_p1_original,
+fit_p1_wide = fit_p1_wide)
+print(bf_comparison)
+```
+
+plot the lag1sleep -> tired edges and their 90% CI under each of the 3 models
+
+```{r}
+plot_prior_sensitivity(edge_narrow, edge_original, edge_wide)
+```
+
+**7) Calculate the posterior difference between group and individual estimates, calculate the 90% CI around the difference score**
+
+```{r}
+draws_p1 <- get_draws_p1(fit_p1)
+draws_group <- get_draws_p1(fit_group)
+
+p1_sleep_tired <- get_p1_sleep_tired(draws_p1)
+group_sleep_tired <- get_p1_sleep_tired(draws_group)
+
+delta_sleep_tired <- get_delta(p1_sleep_tired, group_sleep_tired)
+posterior_difference <- get_posterior_difference(delta_sleep_tired)
+print(posterior_difference)
+```
