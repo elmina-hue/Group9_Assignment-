@@ -33,11 +33,11 @@ if (!requireNamespace("knitr", quietly = TRUE)) {
 }
 knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
-source("simulation_data.R")
-source("analysis_network.R")
-source("plot_prior_sensitivity_R.R")
-source("plots.R")
-source("app.R")
+source("src/simulate_data.R")
+source("src/analysis_network.R")
+source("src/plot_prior_sensitivity_R.R")
+source("src/plots.R")
+source("src/symptom_network_app.R")
 ```
 
 Load the necessary packages to run the project
