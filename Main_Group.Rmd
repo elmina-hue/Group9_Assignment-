@@ -1,0 +1,629 @@
+---
+title: "Group_Project_9"
+author: "Vilelmini Damkali, Miruna Urdea, Christos Avlonitis"
+date: "2026-10-22"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This file provides an example how a Bayesian VAR network analysis for
+depression would work. It also provides an app in which users can
+compare the networks between a group of individuals and another individual. This
+comparison is clinically relevant because treatment approaches are often informed
+by findings at the group level, but those findings may not capture the symptom dynamics
+of a particular person. Examining where individual networks differ can help show
+the limits of applying group-level insights to individual treatment needs and motivate
+ more personalized approaches.
+
+The document proceeds as follows:
+
+1.  Data simulation: a group-level VAR network and an individual-level
+    VAR network are simulated based on many individuals' data
+
+2.  Analysis: A sensitivity analysis is conducted, after which the edge
+    of interest (sleep_lag1 -> tired) under each model is extracted.
+    Then a plot showing how P1’s estimated sleep → tired coefficient
+    changes across three prior settings is given. It is a
+    prior-sensitivity plot. Finally, the differences between the group
+    and individual estimates are calculated, and each difference score's
+    90% CI is given.
+
+3.  App: The app can be opened, and the user can either input their own
+    data or generate a random participant dataset to compare the
+    individual's network and edges to those of the group
+
+## 1. Setup
+
+All source code is loaded from the "src" folder. This document exposes
+the high-level interfaces we need
+
+```{r source files}
+if (!requireNamespace("knitr", quietly = TRUE)) {
+  install.packages("knitr", repos = "https://cloud.r-project.org")
+}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+source("src/analysis_network.R")
+source("src/plot_prior_sensitivity_R.R")
+source("src/plots.R")
+```
+
+Load the necessary cmdstan packages to run the project
+
+Install cmdstanr if missing
+
+```{r}
+# 1. Install cmdstanr if missing
+if (!requireNamespace("cmdstanr", quietly = TRUE)) {
+  install.packages(
+    "cmdstanr",
+    repos = c("https://mc-stan.org/r-packages/", getOption("repos"))
+  )
+}
+```
+
+2.  Install CmdStan if missing (separate from the R package)
+
+```{r}
+cmdstan_installed <- tryCatch(
+  !is.null(cmdstanr::cmdstan_version()),
+  error = function(e) FALSE
+)
+
+if (!cmdstan_installed) {
+  if (.Platform$OS.type == "windows") {
+    cmdstanr::check_cmdstan_toolchain(fix = TRUE)
+  }
+
+  cmdstanr::install_cmdstan(cores = 2)
+}
+```
+
+3.  Install bvarnet if missing
+
+```{r}
+if (!requireNamespace("bvarnet", quietly = TRUE)) {
+  if (!requireNamespace("remotes", quietly = TRUE)) {
+    install.packages("remotes")
+  }
+
+  remotes::install_github("fl01melt/bvarnet", upgrade = "never")
+}
+```
+
+4.  Load packages only if not already attached
+
+```{r}
+if (!"package:cmdstanr" %in% search()) {
+  library(cmdstanr)
+}
+
+if (!"package:bvarnet" %in% search()) {
+  library(bvarnet)
+}
+```
+
+5.  Load some more necessary packages as indicated by the README
+    instructions
+
+```{r packages}
+library(bvarnet)
+library(qgraph)
+library(shiny)
+library(igraph)
+library(readr)
+```
+
+## 2. Simulate data
+
+**1) Defining simulation parameters**
+
+Define the number of participants the data will be simulated on, as well
+as the amount of days data will be simulated for Also define the number
+of symptoms and what these symptoms are (based on the PHQ-9)
+
+```{r simulation size}
+set.seed(2026) 
+
+N <- 25    
+Tt <- 100  
+p <- 9     
+
+symptoms <- c(
+  "down", "tired", "sleep",
+  "anhedonia", "worthlessness", "concentration",
+  "appetite", "psychomotor", "suicidal"
+)
+```
+
+**2) Define the effects/edges between all nodes**
+
+First the matrix with temporal coefficients is created (Phi_group) Then
+the carry-over effects are defined. These represent how strongly a
+symptom today predicts itself tomorrow, and are represented on the
+diagonal of the matrix
+
+```{r edges}
+Phi_group <- matrix(
+  0,
+  nrow = p,
+  ncol = p,
+  dimnames = list(symptoms, symptoms)
+)
+
+diag(Phi_group) <- c(
+  0.30, 0.30, 0.35,
+  0.30, 0.35, 0.30,
+  0.30, 0.30, 0.30
+)
+```
+
+Then the cross-over effects are defined. These represent how strongly
+one symptom today predicts **another symptom** tomorrow, and are
+represented by all other values (excluding the diagonal) on the matrix
+
+```{r temporal matrix}
+Phi_group["down", "sleep"] <- 0.25
+Phi_group["down", "tired"] <- 0.15
+Phi_group["anhedonia", "worthlessness"] <- 0.20
+Phi_group["worthlessness", "anhedonia"] <- 0.15
+Phi_group["concentration", "worthlessness"] <- 0.15
+Phi_group["tired", "appetite"] <- 0.15
+Phi_group["tired", "psychomotor"] <- 0.15
+Phi_group["suicidal", "worthlessness"] <- 0.20
+Phi_group["down", "suicidal"] <- 0.15
+```
+
+All the above together consitute the temporal matrix and which all
+further analyses will be made on
+
+**2) Define between-person variability**
+
+Tau gives the standard deviation of participant-specific deviations from
+each group-level coefficient. These are illustrative simulation
+settings.
+
+```{r between-person variability}
+Tau <- matrix(
+  0.08,
+  nrow = p,
+  ncol = p,
+  dimnames = list(symptoms, symptoms)
+)
+```
+
+For selected coefficients, we allow greater between-person variability
+
+```{r selected coefficients}
+Tau["down", "sleep"] <- 0.15
+Tau["anhedonia", "worthlessness"] <- 0.15
+```
+
+**3) Check temporal stability**
+
+This code checks whether a temproal coefficient matrix produces stable
+dynamics A VAR process is stable when the largest absolute eigenvalue of
+its coefficient matrix is below 1. We use a stricter threshold of 0.95
+to avoid matrices close to the stability boundary (Lütkepohl, H. (2005))
+
+```{r temporal stability}
+stationary <- function(M) {
+  max(Mod(eigen(M, only.values = TRUE)$values)) < 0.95
+}
+```
+
+**4) Set baseline and innovation variability**
+
+This code sets up the baseline, random noise, and storage for your
+simulated symptom data. The latent values are shifted by mu, rounded,
+then clipped to the PHQ-9 item response range of 0 to 3. It stores each
+participant's data separately before combining them (long variable) This
+is a simplified ordinal-data simulation, not a threshold model.
+
+```{r baseline noise}
+mu <- 1.5
+innov_sd <- 0.70
+
+long <- vector("list", N)
+```
+
+**5) Generate each participant's network and daily observations**
+
+Each participant receives a coefficient matrix Phi_i by adding random
+deviations to Phi_group. Participant 1 is deliberately made different
+from the group: - sleep -\> low mood is set to zero; - worthlessness -\>
+anhedonia is strengthened; - anhedonia -\> concentration is
+added/strengthened; - worthlessness -\> suicidal thoughts is
+strengthened.
+
+These are designed examples of individual differences, not estimates
+from real participant data.
+
+Each matrix is redrawn until it passes the stability check.
+
+The chunk of code also includes step-by-step explanations for what the
+code does
+
+```{r generate participant's network}
+for (i in seq_len(N)) {
+
+  repeat {
+
+    # Draw one deviation for every matrix element, using Tau as
+    # the standard deviation for the corresponding coefficient.
+    U <- matrix(
+      rnorm(p * p, mean = 0, sd = as.vector(Tau)),
+      nrow = p,
+      ncol = p
+    )
+
+    # Add participant-specific deviations to the group coefficients.
+    Phi_i <- Phi_group + U
+
+    # Apply the planned individual differences to Participant 1.
+    if (i == 1) {
+      Phi_i["down", "sleep"] <- 0.00
+      Phi_i["anhedonia", "worthlessness"] <- 0.45
+      Phi_i["concentration", "anhedonia"] <- 0.30
+      Phi_i["suicidal", "worthlessness"] <- 0.35
+    }
+
+    # Accept this matrix only if it passes the stability check.
+    if (stationary(Phi_i)) break
+  }
+
+  # ----------------------------------------------------------
+  # Simulate daily latent symptom values
+  # ----------------------------------------------------------
+  # Y contains continuous latent values before conversion to ratings.
+  # The first day is initialised with random noise. Each following
+  # day depends on the previous day's symptoms plus new random noise.
+
+  Y <- matrix(0, nrow = Tt, ncol = p)
+  Y[1, ] <- rnorm(p, mean = 0, sd = innov_sd)
+
+  for (t in 2:Tt) {
+    Y[t, ] <- Phi_i %*% Y[t - 1, ] +
+      rnorm(p, mean = 0, sd = innov_sd)
+  }
+
+  # ----------------------------------------------------------
+  # Convert latent values to PHQ-9-style item ratings (0 to 3)
+  # ----------------------------------------------------------
+  # 1. Add the baseline mean.
+  # 2. Round to the nearest whole number.
+  # 3. Clip values below 0 to 0 and above 3 to 3.
+  #
+  # This is a simplified procedure and does not explicitly model
+  # ordinal response thresholds.
+
+  obs <- round(mu + Y)
+  obs[obs < 0] <- 0
+  obs[obs > 3] <- 3
+
+  # Save participant ID, day, and the nine symptom-domain ratings.
+  long[[i]] <- data.frame(
+    id = i,
+    day = 1:Tt,
+    obs
+  )
+}
+```
+
+**6) Combine all participants into one dataset**
+
+combines all participants’ simulated data into one dataset and checks
+its basic structure.
+
+ema has one row per participant-day, with columns for participant ID,
+day, and the nine symptom-domain ratings.
+
+```{r combined dataset}
+ema <- do.call(rbind, long)
+colnames(ema) <- c("id", "day", symptoms)
+
+# Basic checks: expected dimensions, variable names, and rating range.
+stopifnot(nrow(ema) == N * Tt)
+stopifnot(all(c("id", "day", symptoms) %in% names(ema)))
+stopifnot(all(as.matrix(ema[, symptoms]) %in% 0:3))
+```
+
+**7) Calculate the frequency of each rating**
+
+This summarizes how often each symptom receives ratings of 0, 1, 2, or
+3, highlights the lowest and highest ratings, and checks that all
+expected ratings are present.
+
+Including all levels ensures that ratings with zero occurrences still
+appear.
+
+Proportions are calculated separately for each symptom.
+
+```{r frequency and proportions of each rating}
+rating_frequencies <- do.call(
+  rbind,
+  lapply(symptoms, function(s) {
+
+    counts <- table(
+      factor(ema[[s]], levels = 0:3)
+    )
+
+    data.frame(
+      symptom = s,
+      rating = 0:3,
+      count = as.integer(counts),
+      proportion = as.integer(counts) / nrow(ema)
+    )
+  })
+)
+
+print(rating_frequencies)
+
+# Display only the minimum (0) and maximum (3) ratings.
+boundary_frequencies <- rating_frequencies[
+  rating_frequencies$rating %in% c(0, 3),
+]
+
+print(boundary_frequencies)
+
+# Check that each symptom has exactly N * Tt ratings in total.
+ratings_per_symptom <- aggregate(
+  count ~ symptom,
+  data = rating_frequencies,
+  FUN = sum
+)
+stopifnot(all(ratings_per_symptom$count == N * Tt))
+```
+
+**8) Save the generated data and frequency table**
+
+saves the simulated dataset and its rating-frequency table as two CSV
+files.
+
+These paths assume the script is run from the repository root.
+
+The folder is created if it does not already exist.
+
+```{r save csv file}
+dir.create("data", showWarnings = FALSE, recursive = TRUE)
+
+write.csv(
+  ema,
+  "data/ema_simulated.csv",
+  row.names = FALSE
+)
+
+write.csv(
+  rating_frequencies,
+  "data/rating_frequencies.csv",
+  row.names = FALSE
+)
+```
+
+## 3. Run the analysis
+
+**1) Defining the symptoms and the prior**
+
+First, the symptoms based on the PHQ-9 are defined.
+
+Then, the prior model on which the VAR networks will be fitted is
+defined. A zero-centered Cauchy prior was used for temporal coefficients
+to regularize effects while allowing larger values (Gelman et al.,
+2008). Between-person standard deviations were assigned a normal prior
+restricted to non-negative values, reflecting a preference for smaller
+heterogeneity.
+
+```{r}
+ys <- c("down", "tired", "sleep", "anhedonia", "worthlessness", "concentration","appetite", "psychomotor", "suicidal")
+pr <- set_priors(phi = prior(family = "cauchy", loc = 0, scale = 0.5), sd_u = prior(family = "normal", loc = 0, scale = 0.35))
+```
+
+A Markov Chain Monte Carlo (MCMC) was used to estimate both the
+group-level networks and the individual level-network
+
+MCMC is a method for approximating the range of plausible parameter
+values given your data and model. It repeatedly samples possible values,
+moving from one set of values to another. Once the sampling has
+converged, these samples can be used to estimate parameters and describe
+uncertainty (van Ravenzwaaij et al., 2018).
+
+**2) Creating the group-level VAR network**
+
+(Message to the user: This can take a bit of time, so sorry in advance
+:))
+
+```{r group network}
+group_results <- run_group_network(ema = ema, ys = ys, pr = pr)
+plot_temporal_network(
+  network = group_results$fit_group,
+  extractor = function(fit) {
+    bvarnet::extract_network_matrix(fit, stat = "mean")
+  },
+  level = "group",
+  node_names = ys,
+  transpose = TRUE
+)
+```
+
+In this chunk we store the group-network into a cache. This is done to
+save time from having to run the group-level network model again later
+on in the app
+
+```{r}
+group_network <- bvarnet::extract_network_matrix(
+  group_results$fit_group,
+  stat = "mean"
+)
+group_network <- group_network[ys, ys, drop = FALSE]
+
+group_draws <- get_draws_p1(
+  group_results$fit_group,
+  parameter = "phi"
+)
+
+dir.create("src/data", recursive = TRUE, showWarnings = FALSE)
+saveRDS(
+  list(network = group_network, draws = group_draws),
+  "src/data/group_posterior_cache.rds"
+)
+```
+
+**3) Creating the inidividual-level VAR network**
+
+Here we subset the first participant from the whole dataset of all 25
+participants. The first participant is used to estimate the
+individual-level network
+
+```{r individual network}
+ema_p1 <- subset(ema, id == 1)
+individual_results <- run_individual_network(ema = ema, ys = ys, pr = pr, participant_id = 1)
+plot_temporal_network(
+  network = individual_results$fit_individual,
+  extractor = bvarnet::extract_network_matrix,
+  level = "individual",
+  participant = 1,
+  node_names = ys,
+  transpose = TRUE
+)
+```
+
+**4) Conduct a sensitivity analysis**
+
+A sensitivity analysis is conducted. We conduct a sensitivity analysis
+to check whether the conclusions depend strongly on our choice of prior.
+
+The sensitivity analysis will include the original prior with a scale of
+0.5. Two more priors with a scale of 0.35 and 0.65 will be included
+accordingly. The scale values were chosen since they have the same
+absolute distance from the original prior scale (scale = 0.5)
+
+```{r sensitivity analysis}
+fit_p1_original <- fit_original_model(ema_p1 = ema_p1, ys = ys)
+fit_p1_narrow   <- fit_narrow_model(ema_p1 = ema_p1, ys = ys)
+fit_p1_wide     <- fit_wide_model(ema_p1 = ema_p1, ys = ys)
+
+summary(fit_p1_original)
+summary(fit_p1_narrow)
+summary(fit_p1_wide)
+```
+
+The rest of the analysis will be interested in one specific edge: sleep
+problems and associated fatigue are core symptoms of depression: they
+strongly predict all other core symptoms and they persist even after
+mood symptoms have improved (Nutt et al., 2008). This complicates
+recovery and quality of life, and also predicts possible relapses.
+
+**5) Extract the edge of interest for each of the 3 fitted models**
+
+```{r extract edges from each model}
+edge_original <- extract_original_temporal(
+fit_p1_original, predictor = "sleep", outcome = "tired")
+edge_narrow <- extract_narrow_temporal(
+fit_p1_narrow, predictor = "sleep", outcome = "tired")
+edge_wide <- extract_wide_temporal(
+fit_p1_wide, predictor = "sleep", outcome = "tired")
+
+print(rbind(
+  "Original_prior" = edge_original, 
+  "Narrow_prior" = edge_narrow, 
+  "Wide_prior" = edge_wide))
+```
+
+**6) Compare the posterior edges and their 90% Confidence Intervals**
+
+First a sensitivity table is created: Each edge under each model is
+given along with its equivalent 90% CI. This checks whether the
+estimated effect changes when you use different prior scales.
+
+```{r sensitivity table}
+sensitivity_table <- compare_posteriors(
+edge_narrow = edge_narrow,
+edge_original = edge_original,
+edge_wide = edge_wide)
+print(sensitivity_table)
+```
+
+This is a table showcasing the BF for each lag1sleep -\> tired edge
+under each model The Bayes Factor for each of the 3 models is
+quantified. Bayes factors quantify the relative evidence for two
+competing hypotheses by comparing how well each predicts the observed
+data (Kass & Raftery, 1995). In this case, Hypothesis 1 (H1) represents
+the hypothesis that the temporal edge is different from 0 Hypothesis 0
+(Ho) represents the hypothesis that the temporal edge is equal to 0
+
+```{r comparison of Bayes Factor's}
+bf_comparison <- compare_bayes_factors(
+fit_p1_narrow = fit_p1_narrow,
+fit_p1_original = fit_p1_original,
+fit_p1_wide = fit_p1_wide)
+print(bf_comparison)
+```
+
+plot the lag1sleep -\> tired edges and their 90% CI under each of the 3
+models
+
+```{r prior sensitivity plot}
+plot_prior_sensitivity(edge_narrow, edge_original, edge_wide)
+```
+
+**7) Calculate the posterior difference between group and individual
+estimates, calculate the 90% CI around the difference score**
+
+```{r posterior difference and equivalent 90% CI}
+draws_p1 <- get_draws_p1(fit_p1_original)
+draws_group <- get_draws_p1(group_results$fit_group)
+
+p1_sleep_tired <- get_p1_sleep_tired(draws_p1)
+group_sleep_tired <- get_p1_sleep_tired(draws_group)
+
+delta_sleep_tired <- get_delta(p1_sleep_tired, group_sleep_tired)
+posterior_difference <- get_posterior_difference(delta_sleep_tired)
+print(posterior_difference)
+```
+
+## 4. Run the app
+
+This interactive R Shiny app explores how a person’s depression symptom
+ratings on one day are associated with their ratings on the next day.
+
+#### How it works
+
+**1. Choose and preview OR randomly generate participant data**
+
+Users can select a simulated participant from the project dataset or upload a CSV containing one participant’s daily observations. For a simulated participant, users choose how many available days to include. The preview displays the first ten rows before analysis begins.
+
+**2. Estimate the participant’s temporal network**
+
+Selecting Analyse fits a fresh individual Bayesian vector autoregressive model using bvarnet. The model estimates both:
+- Carry-over relationships: whether a symptom predicts its own next-day value.
+- Cross-symptom relationships: whether a symptom predicts another symptom’s next-day value, accounting for the other modeled symptoms.
+The fitting calls specify four MCMC chains, with the same settings, prior distributions and standard deviations used in the analysis example above
+
+**3. Compare the individual and group networks**
+
+After fitting, the app displays the participant network beside a group reference network based on the project’s simulated group data
+The group reference is loaded from a saved posterior cache when available; otherwise, it is fitted at startup and saved for later launches.
+the network plots:
+- Nodes represent the nine symptoms.
+- Arrows indicate yesterday’s predictor → today’s outcome.
+- Teal edges indicate positive estimated relationships; rose edges indicate negative relationships.
+- Self-loops represent a symptom’s carry-over effect.
+- Edge values, when enabled, display posterior mean coefficients.
+
+Users can change the minimum absolute coefficient shown, hide self-loops, and hide edge labels. These controls change the visualization, not the fitted model or the edge-comparison table. The interface also reports the number of daily observations and consecutive day-to-
+
+**4. Inspect differences and uncertainty**
+
+The edge table contains all 81 directed symptom pairs, including the nine self-links. For each pair, it reports the group estimate, participant estimate, participant-minus-group difference, and a 90% posterior credible interval for that difference. Rows are ordered by the absolute size of the estimated difference.
+
+The interval bounds are shown in bold when the interval excludes zero. This highlights differences supported by the fitted models under their assumptions; it does not establish causation or provide a multiple-comparison-adjusted significance test.
+
+```{r app`}
+source("src/symptom_network_app.R")
+```
