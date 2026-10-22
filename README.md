@@ -153,7 +153,7 @@ Clone or download the repository from GitHub and open the project folder in RStu
 
 ### 2. Run the Main Deliverable
 
-Open main.Rmd in RStudio and knit the document. The main file automatically checks whether the required R packages are installed and loaded, installing and/or loading them as needed. It also checks and handles the necessary CmdStan setup before running the analysis.
+Open Main_Group.Rmd in RStudio and knit the document. The main file automatically checks whether the required R packages are installed and loaded, installing and/or loading them as needed. It also checks and handles the necessary CmdStan setup before running the analysis.
 
 The main file is intended to run the project workflow from beginning to end, including generating the simulated dataset, conducting the statistical analysis, producing visualisations, and presenting the results and discussion.
 
