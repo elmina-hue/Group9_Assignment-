@@ -56,9 +56,71 @@ source("src/plots.R")
 source("src/symptom_network_app.R")
 ```
 
-Load the necessary packages to run the project
+Load the necessary cmdstan packages to run the project
+
+Install cmdstanr if missing
+
+```{r}
+# 1. Install cmdstanr if missing
+if (!requireNamespace("cmdstanr", quietly = TRUE)) {
+  install.packages(
+    "cmdstanr",
+    repos = c("https://mc-stan.org/r-packages/", getOption("repos"))
+  )
+}
+```
+
+2. Install CmdStan if missing (separate from the R package)
+
+```{r}
+cmdstan_installed <- tryCatch(
+  !is.null(cmdstanr::cmdstan_version()),
+  error = function(e) FALSE
+)
+
+if (!cmdstan_installed) {
+  if (.Platform$OS.type == "windows") {
+    cmdstanr::check_cmdstan_toolchain(fix = TRUE)
+  }
+
+  cmdstanr::install_cmdstan(cores = 2)
+}
+```
+
+3. Install bvarnet if missing
+
+```{r}
+if (!requireNamespace("bvarnet", quietly = TRUE)) {
+  if (!requireNamespace("remotes", quietly = TRUE)) {
+    install.packages("remotes")
+  }
+
+  remotes::install_github("fl01melt/bvarnet", upgrade = "never")
+}
+```
+
+4. Load packages only if not already attached
+
+```{r}
+if (!"package:cmdstanr" %in% search()) {
+  library(cmdstanr)
+}
+
+if (!"package:bvarnet" %in% search()) {
+  library(bvarnet)
+}
+```
 
 ```{r packages}
+if (!requireNamespace("cmdstanr", quietly = TRUE)) {
+  install.packages(
+    "cmdstanr",
+    repos = c("https://mc-stan.org/r-packages/", getOption("repos"))
+  )
+}
+
+
+
 install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
 cmdstanr::check_cmdstan_toolchain(fix = TRUE)
 cmdstanr::install_cmdstan(cores = 2,overwrite=TRUE)
@@ -491,7 +553,7 @@ fit_p1_wide, predictor = "sleep", outcome = "tired")
 print(rbind(
   "Original_prior" = edge_original, 
   "Narrow_prior" = edge_narrow, 
-  "Wide_prior" = edge_wide)))
+  "Wide_prior" = edge_wide))
 ```
 
 **6) Compare the posterior edges and their 90% Confidence Intervals**
