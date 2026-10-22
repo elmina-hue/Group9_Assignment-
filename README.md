@@ -162,7 +162,7 @@ The simulation script, src/simulate_data.R, generates daily symptom ratings and 
 From the repository root, run:
 
 ```r
-shiny::runApp("symptom_network_app.R")
+shiny::runApp("src/symptom_network_app.R")
 ```
 
 The application opens an interactive interface for generating or uploading participant data and comparing the participant's temporal network with the group-level network.
