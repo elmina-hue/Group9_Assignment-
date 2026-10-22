@@ -224,6 +224,7 @@ MCMC is a method for approximating the range of plausible parameter values given
 
 **2) Creating the group-level VAR network**
 
+(Message to the user: This can take a bit of time, so sorry in advance :))
 ```{r group network}
 group_results <- run_group_network(ema = ema, ys = ys, pr = pr)
 plot_temporal_network(
