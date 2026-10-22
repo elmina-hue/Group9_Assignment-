@@ -70,7 +70,7 @@ if (!requireNamespace("cmdstanr", quietly = TRUE)) {
 }
 ```
 
-2. Install CmdStan if missing (separate from the R package)
+2.  Install CmdStan if missing (separate from the R package)
 
 ```{r}
 cmdstan_installed <- tryCatch(
@@ -87,7 +87,7 @@ if (!cmdstan_installed) {
 }
 ```
 
-3. Install bvarnet if missing
+3.  Install bvarnet if missing
 
 ```{r}
 if (!requireNamespace("bvarnet", quietly = TRUE)) {
@@ -99,7 +99,7 @@ if (!requireNamespace("bvarnet", quietly = TRUE)) {
 }
 ```
 
-4. Load packages only if not already attached
+4.  Load packages only if not already attached
 
 ```{r}
 if (!"package:cmdstanr" %in% search()) {
@@ -111,7 +111,8 @@ if (!"package:bvarnet" %in% search()) {
 }
 ```
 
-5. Load some more necessary packages as indicated by the README instructions
+5.  Load some more necessary packages as indicated by the README
+    instructions
 
 ```{r packages}
 library(bvarnet)
@@ -590,8 +591,41 @@ print(posterior_difference)
 
 ## 4. Run the app
 
+This interactive R Shiny app explores how a person’s depression symptom
+ratings on one day are associated with their ratings on the next day.
+
+#### How it works
+
+**1. Choose and preview OR randomly generate participant data**
+
+Users can select a simulated participant from the project dataset or upload a CSV containing one participant’s daily observations. For a simulated participant, users choose how many available days to include. The preview displays the first ten rows before analysis begins.
+
+**2. Estimate the participant’s temporal network**
+
+Selecting Analyse fits a fresh individual Bayesian vector autoregressive model using bvarnet. The model estimates both:
+- Carry-over relationships: whether a symptom predicts its own next-day value.
+- Cross-symptom relationships: whether a symptom predicts another symptom’s next-day value, accounting for the other modeled symptoms.
+The fitting calls specify four MCMC chains, with the same settings, prior distributions and standard deviations used in the analysis example above
+
+**3. Compare the individual and group networks**
+
+After fitting, the app displays the participant network beside a group reference network based on the project’s simulated group data
+The group reference is loaded from a saved posterior cache when available; otherwise, it is fitted at startup and saved for later launches.
+the network plots:
+- Nodes represent the nine symptoms.
+- Arrows indicate yesterday’s predictor → today’s outcome.
+- Teal edges indicate positive estimated relationships; rose edges indicate negative relationships.
+- Self-loops represent a symptom’s carry-over effect.
+- Edge values, when enabled, display posterior mean coefficients.
+
+Users can change the minimum absolute coefficient shown, hide self-loops, and hide edge labels. These controls change the visualization, not the fitted model or the edge-comparison table. The interface also reports the number of daily observations and consecutive day-to-
+
+**4. Inspect differences and uncertainty**
+
+The edge table contains all 81 directed symptom pairs, including the nine self-links. For each pair, it reports the group estimate, participant estimate, participant-minus-group difference, and a 90% posterior credible interval for that difference. Rows are ordered by the absolute size of the estimated difference.
+
+The interval bounds are shown in bold when the interval excludes zero. This highlights differences supported by the fitted models under their assumptions; it does not establish causation or provide a multiple-comparison-adjusted significance test.
+
 ```{r app`}
-
-
-
+source("src/symptom_network_app.R")
 ```
