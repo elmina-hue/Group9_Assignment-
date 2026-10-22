@@ -1,19 +1,22 @@
 # Description of app for user:
 
-# The app loads a saved group network or fits a multilevel Bayesian VAR to the 
-# group data if no saved network exists. It separately fits a Bayesian VAR to 
-# one participant’s daily symptom ratings. Both produce lag-one 
-# temporal networks, where an arrow means one symptom predicts another on the 
-# next day. The app displays those networks side by side and provides edge 
-# estimates for comparison. The example data are simulated, and the network 
-# associations should not be interpreted as proof of causation.
+# This Shiny app compares a group-level symptom network with a participant-level
+# network. It uses the shared fitting functions in analysis_network.R and fits
+# the group model at startup so it can use posterior draws to calculate intervals
+# for participant-minus-group edge differences. The group posterior mean network
+# is also saved to data/group_network.csv. Each arrow represents a lag-one
+# temporal association: a symptom on one day predicting another symptom the next
+# day. The example data are simulated; these associations do not prove causation.
 
 # Brief description of script:
 
-# Combined two-page Shiny app: participant data input and side-by-side networks.
-# Run from the project root with: shiny::runApp("symptom_network_app.R")
-# The group reference is fitted from the `ema` data frame created by
-# src/simulate_data.R and cached in src/data/group_network.csv.
+# Two-page Shiny app for participant data input and network comparison.
+# Run from the project root with:
+#   shiny::runApp("Group9_Assignment--main/src/symptom_network_app.R")
+# The group model uses the `ema` data frame created by simulate_data.R. Its
+# posterior mean matrix is written to src/data/group_network.csv for reference;
+# the app refits the model at startup because edge-difference intervals require
+# posterior draws, which are not stored in that CSV.
 
 required_packages <- c("shiny", "bvarnet", "igraph", "readr")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace,
@@ -23,7 +26,7 @@ if (length(missing_packages)) stop("Install required packages first: ", paste(mi
 symptoms <- c("down", "tired", "sleep", "anhedonia", "worthlessness",
               "concentration", "appetite", "psychomotor", "suicidal")
 
-#find the script's own location and locate project files
+# Locate this app's supporting scripts and data relative to the app file.
 script_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 source_files <- vapply(sys.frames(), function(frame) if (!is.null(frame$ofile)) as.character(frame$ofile)[1] else "", character(1))
 source_files <- source_files[nzchar(source_files)]
@@ -31,12 +34,16 @@ script_path <- if (length(script_arg)) sub("^--file=", "", script_arg[1]) else i
 app_dir <- dirname(normalizePath(script_path, mustWork = FALSE))
 simulation_env <- new.env(parent = globalenv())
 source(file.path(app_dir, "simulate_data.R"), local = simulation_env)
+source(file.path(app_dir, "plots.R"), local = TRUE)
+analysis_env <- new.env(parent = asNamespace("bvarnet"))
+source(file.path(app_dir, "analysis_network.R"), local = analysis_env)
 group_data <- simulation_env$ema
 
-#set expected file locations
-group_network_path <- file.path(app_dir, "data", "group_network.csv") # group model's estimated network
+# Path for the saved group posterior mean network matrix.
+group_network_path <- file.path(app_dir, "data", "group_network.csv")
 
-#check participant data; requires day column and symptom columns
+# Validate uploaded participant data: one row per consecutive day, with all
+# nine symptom ratings recorded as integers from 0 to 3.
 validate_symptom_data <- function(data) {
   required <- c("day", symptoms)
   missing <- setdiff(required, names(data))
@@ -53,83 +60,75 @@ validate_symptom_data <- function(data) {
   data
 }
 
-# Preparing and fitting the group model:
-#reads saved network and checks that it contains all symptoms as row and column names
-read_network <- function(path) {
-  x <- as.matrix(utils::read.csv(path, row.names = 1, check.names = FALSE))
-  if (!all(symptoms %in% rownames(x)) || !all(symptoms %in% colnames(x))) stop("Group network must label all nine PHQ-9 symptom domains on rows and columns.")
-  x[symptoms, symptoms, drop = FALSE]
+# The shared analysis functions call bvarnet::bvar(). If its Stan models have
+# not been compiled yet, compile them once and retry that shared analysis call.
+run_with_stan_setup <- function(analysis_call) {
+  tryCatch(
+    analysis_call(),
+    error = function(e) {
+      if (!grepl("Stan models are not set up", conditionMessage(e), fixed = TRUE)) {
+        stop(e)
+      }
+      bvarnet::bvarnet_setup_models(method = "compile", ask = FALSE)
+      analysis_call()
+    }
+  )
 }
 
-#tries to fit a model
-fit_bvarnet <- function(...) tryCatch(bvarnet::bvar(...), error = function(e) {
-  if (!grepl("Stan models are not set up", conditionMessage(e), fixed = TRUE)) stop(e)
-  bvarnet::bvarnet_setup_models(method = "compile", ask = FALSE)
-  bvarnet::bvar(...)
-})
+# The sourced analysis functions resolve bvarnet functions in their enclosing
+# environment. Use the same priors as the project's analysis specification.
+network_priors <- bvarnet::set_priors(
+  phi = bvarnet::prior(family = "cauchy", loc = 0, scale = 0.50),
+  sd_u = bvarnet::prior(family = "normal", loc = 0, scale = 0.35)
+)
 
-#gets the group network when the app starts, fitting it from the simulator's ema frame if no cached network exists
+# Fit the group model through the shared analysis function so the app and report
+# use the same specification. Retain its fit for posterior edge comparisons.
 prepare_group_reference <- function() {
-  if (file.exists(group_network_path)) return(read_network(group_network_path))
-  d <- group_data
-  required <- c("id", "day", symptoms)
-  if (!all(required %in% names(d))) stop("Group data needs columns: ", paste(required, collapse = ", "))
-  #sets Cauchy prior for temporal coefficients & normal prior for residual standard deviations
-  priors <- bvarnet::set_priors(phi = bvarnet::prior(family = "cauchy", loc = 0, scale = .5),
-                                sd_u = bvarnet::prior(family = "normal", loc = 0, scale = .35))
-  #fit lag-one Gaussian model; runs 4 chains with 2000 iterations per chain
-  fit <- fit_bvarnet(id_col = "id", time_col = "day", y_cols = symptoms, re_cols = "Intercept",
-                     re_temporal = TRUE, K = 1, data = as.data.frame(d), family = "gaussian",
-                     priors = priors, iter = 2000, warmup = 500, chains = 4, cores = 1, seed = 2026)
-  #extracts the posterior mean network and saves it
+  analysis <- run_with_stan_setup(function() {
+    analysis_env$run_group_network(
+      ema = as.data.frame(group_data), ys = symptoms, pr = network_priors,
+      iter = 4000, warmup = 1000, chains = 4, cores = 1, seed = 2026
+    )
+  })
+  fit <- analysis$fit_group
   net <- bvarnet::extract_network_matrix(fit, stat = "mean")
+  net <- net[symptoms, symptoms, drop = FALSE]
   dir.create(dirname(group_network_path), recursive = TRUE, showWarnings = FALSE)
   utils::write.csv(net, group_network_path, row.names = TRUE)
-  net
+  list(network = net, fit = fit)
 }
 
-# Fitting the individual participant model:
-#checks participant data, fits a lag-one VAR, extracts posterior mean coefficiants
+# Fit the selected participant with the shared individual-level analysis
+# function. Return both the posterior mean network and the fitted model.
 fit_person_network <- function(d) {
   d <- validate_symptom_data(d)
-  fit <- fit_bvarnet(id_col = ".person", time_col = "day", y_cols = symptoms, re_cols = NULL,
-                     re_temporal = FALSE, K = 1, data = transform(d, .person = 1), family = "gaussian",
-                     iter = 1200, warmup = 400, chains = 2, cores = 1, seed = 2026)
+  participant_data <- transform(d, id = 1)
+  analysis <- run_with_stan_setup(function() {
+    analysis_env$run_individual_network(
+      ema = participant_data, ys = symptoms, pr = network_priors,
+      participant_id = 1, iter = 4000, warmup = 1000, chains = 4,
+      cores = 1, seed = 2026
+    )
+  })
+  fit <- analysis$fit_individual
   m <- bvarnet::extract_network_matrix(fit, stat = "mean")
-  m[symptoms, symptoms, drop = FALSE]
+  list(network = m[symptoms, symptoms, drop = FALSE], fit = fit)
 }
-# network matrix: rows->symptoms being predicted today; columns->symptoms used as a predictor yesterday.
+# bvarnet network matrices use rows for lagged predictors and columns for outcomes.
 
-#generates example data using the group network as the data-generating pattern
+# Generate example data using one simulated participant from the project data.
 make_example_data <- function(person_id, n_days) {
   d <- group_data[group_data$id == person_id, c("day", symptoms), drop = FALSE]
   utils::head(d, n_days)
 }
 #returns one participant's simulated rows with a day column and nine symptom columns
 
-# Drawing the networks:
-#turns coefficient matrix into network diagram
-draw_network <- function(A, title, threshold, loops, labels) {
-  shown <- A  #A->coefficient matrix
-  shown[abs(shown) < threshold] <- 0  #threshold = minimal abs coefficient to display
-  if (!loops) diag(shown) <- 0  #loops - whether to show self-connections
-  g <- igraph::graph_from_adjacency_matrix(t(shown), mode = "directed", weighted = TRUE, diag = TRUE) #converts matrix into graph
-  n_symptoms <- length(symptoms)
-  theta <- pi / 2 - (0:(n_symptoms - 1)) * 2 * pi / n_symptoms  # evenly spaced points around a circle
-  weights <- igraph::E(g)$weight  #gets coefficient attached to each edge in the graph
-  graphics::par(mar = c(1, 1, 3, 1))
-  #draws the graph:
-  plot(g, layout = cbind(cos(theta), sin(theta)), main = title, vertex.label = symptoms,
-       vertex.size = 34, vertex.color = "#f1f5f9", vertex.frame.color = "#334155",
-       vertex.label.color = "#0f172a", edge.color = ifelse(weights >= 0, "#0d9488", "#e11d48"),
-       edge.width = pmin(7, 1 + abs(weights) * 8), edge.arrow.size = .55, edge.curved = .15,
-       edge.label = if (labels) sprintf("%.2f", weights) else NA,
-       edge.label.color = "#334155", edge.label.cex = .8, margin = .25)
-}
-
-# Building the two pages of the app:
-#loads/fits the group network when the app starts
-group_network <- prepare_group_reference()
+# Build the group reference once when the app starts. The mean matrix is used
+# for plotting; posterior draws are used to summarize edge differences.
+group_analysis <- prepare_group_reference()
+group_network <- group_analysis$network
+group_draws <- analysis_env$get_draws_p1(group_analysis$fit, parameter = "phi")
 
 ui <- shiny::fluidPage(
   #sets up the page and title
@@ -161,8 +160,8 @@ ui <- shiny::fluidPage(
       shiny::h4("Edge estimates"), shiny::tableOutput("edges")))
 )
 
-# Connecting the interface to the analysis:
-#tells the app what to do when someone interacts with it
+# Connect the existing interface to the analysis. Model errors are returned to
+# the status message so they do not stop the Shiny session.
 server <- function(input, output, session) {
   result <- shiny::eventReactive(input$generate + input$analyse, {  #eventReactive runs the analysis
     tryCatch({  #tryCatch captures errors so the app can show them as status message
@@ -170,20 +169,63 @@ server <- function(input, output, session) {
         shiny::req(input$file); readr::read_csv(input$file$datapath, show_col_types = FALSE)
       }
       d <- validate_symptom_data(d)
-      list(data = d, individual = fit_person_network(d), error = NULL)
+      person <- fit_person_network(d)
+      list(data = d, individual = person$network, fit = person$fit, error = NULL)
     }, error = function(e) list(data = NULL, individual = NULL, error = conditionMessage(e)))
   }, ignoreInit = TRUE)
   #filling in the interface:
   output$status <- shiny::renderText({ x <- result(); if (is.null(x$error)) "Model fitted using the project’s Bayesian VAR approach." else paste("Could not analyse data:", x$error) })
   output$preview <- shiny::renderTable({ x <- result(); shiny::req(is.null(x$error)); utils::head(x$data, 10) })
   output$counts <- shiny::renderText({ x <- result(); shiny::req(is.null(x$error)); sprintf("%d daily observations | %d consecutive transitions", nrow(x$data), nrow(x$data) - 1) })
-  output$group_plot <- shiny::renderPlot({ draw_network(group_network, "Group network", input$threshold, input$loops, input$labels) })
-  output$person_plot <- shiny::renderPlot({ x <- result(); shiny::req(is.null(x$error)); draw_network(x$individual, "Participant network", input$threshold, input$loops, input$labels) })
-  output$edges <- shiny::renderTable({  #makes one row for each directed pair of nine symptoms
+  output$group_plot <- shiny::renderPlot({
+    plot_temporal_network(
+      group_network, level = "group", title = "Group network", subtitle = "",
+      node_names = symptoms, threshold = input$threshold,
+      show_loops = input$loops, show_edge_labels = input$labels,
+      show_notes = FALSE
+    )
+  })
+  output$person_plot <- shiny::renderPlot({
     x <- result(); shiny::req(is.null(x$error))
-    g <- as.data.frame(as.table(group_network), stringsAsFactors = FALSE); names(g) <- c("Outcome", "Previous-day symptom", "Group estimate")
-    p <- as.data.frame(as.table(x$individual), stringsAsFactors = FALSE); names(p) <- c("Outcome", "Previous-day symptom", "Participant estimate")
-    z <- merge(g, p, by = c("Outcome", "Previous-day symptom")); z$Difference <- z$`Participant estimate` - z$`Group estimate`
+    plot_temporal_network(
+      x$individual, level = "individual", title = "Participant network", subtitle = "",
+      node_names = symptoms, threshold = input$threshold,
+      show_loops = input$loops, show_edge_labels = input$labels,
+      show_notes = FALSE
+    )
+  })
+  output$edges <- shiny::renderTable({  #one row per directed symptom pair
+    x <- result(); shiny::req(is.null(x$error))
+    person_draws <- analysis_env$get_draws_p1(x$fit, parameter = "phi")
+    n_draws <- min(nrow(group_draws), nrow(person_draws))
+    if (n_draws < 1L) stop("The fitted models did not return posterior draws.")
+    # The models retain different numbers of draws, so take equally sized sets
+    # before calculating independent draw-wise participant-minus-group deltas.
+    group_idx <- unique(round(seq(1, nrow(group_draws), length.out = n_draws)))
+    person_idx <- unique(round(seq(1, nrow(person_draws), length.out = n_draws)))
+    n_draws <- min(length(group_idx), length(person_idx))
+    group_idx <- group_idx[seq_len(n_draws)]
+    person_idx <- person_idx[seq_len(n_draws)]
+    rows <- vector("list", length(symptoms)^2)
+    k <- 0L
+    for (i in seq_along(symptoms)) for (j in seq_along(symptoms)) {
+      k <- k + 1L
+      edge <- sprintf("phi[%d,%d]", i, j)
+      group_edge <- analysis_env$get_p1_sleep_tired(group_draws[group_idx, , drop = FALSE], edge = edge)
+      person_edge <- analysis_env$get_p1_sleep_tired(person_draws[person_idx, , drop = FALSE], edge = edge)
+      delta <- analysis_env$get_delta(person_edge, group_edge)
+      difference <- analysis_env$get_posterior_difference(delta)
+      rows[[k]] <- data.frame(
+        `Previous-day symptom` = symptoms[i], Outcome = symptoms[j],
+        `Group estimate` = group_network[i, j],
+        `Participant estimate` = x$individual[i, j],
+        Difference = x$individual[i, j] - group_network[i, j],
+        `90% CI lower` = difference[["lower"]],
+        `90% CI upper` = difference[["upper"]],
+        check.names = FALSE
+      )
+    }
+    z <- do.call(rbind, rows)
     z[order(-abs(z$Difference)), ]
   }, digits = 3)
 }
