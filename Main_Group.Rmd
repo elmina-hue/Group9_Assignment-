@@ -435,7 +435,7 @@ uncertainty (van Ravenzwaaij et al., 2018).
 
 **2) Creating the group-level VAR network**
 
-(Message to the user: This can take a bit of time, so sorry in advance
+(Message to the user: This can take a bit of time, it takes about 20 minutes to run it... So sorry in advance
 :))
 
 ```{r group network}
