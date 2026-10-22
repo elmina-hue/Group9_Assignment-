@@ -1,23 +1,25 @@
-# Description of app for user:
-
-# This Shiny app compares a group-level symptom network with a participant-level
-# network. It uses the shared fitting functions in analysis_network.R and fits
-# the group model at startup when no reusable posterior cache exists. The cache
-# stores the mean network and temporal-coefficient draws needed for edge
-# difference intervals. The mean network is also saved to data/group_network.csv.
-# Each individual analysis fits a fresh participant model. Each arrow represents a lag-one
-# temporal association: a symptom on one day predicting another symptom the next
-# day. The example data are simulated; these associations do not prove causation.
-
-# Brief description of script:
-
-# Two-page Shiny app for participant data input and network comparison.
-# Run from the project root with:
+# Participant and group symptom network app
+#
+# Use this app to explore how yesterday's symptom ratings are associated with
+# today's ratings. Choose a simulated participant or upload a CSV, preview the
+# daily ratings, and then fit that participant's model. The app compares the
+# participant network with a group reference network and shows posterior
+# intervals for the difference between their edge estimates. Bold intervals
+# do not include zero. These temporal associations describe prediction, not
+# causation; the built-in participant data are simulated for demonstration.
+#
+# App details:
+# - Uploaded data need one row per consecutive day, a `day` column, and all
+#   nine symptom columns shown in the upload instructions. Ratings must be
+#   whole numbers from 0 to 3, with at least 30 days of observations.
+# - The participant model is fitted each time the user selects Analyse. This
+#   can take a few minutes; the daily ratings can be previewed beforehand.
+# - The group network is loaded from the saved posterior cache when available.
+#   If the cache is missing, the app fits the group model once and saves the
+#   network and posterior draws for later launches.
+#
+# Run from the repository root with:
 #   shiny::runApp("Group9_Assignment--main/src/symptom_network_app.R")
-# The group model uses the `ema` data frame created by simulate_data.R. Its
-# posterior mean matrix is written to src/data/group_network.csv, and its mean
-# matrix plus temporal draws are cached in src/data/group_posterior_cache.rds.
-# If that posterior cache exists, the app reuses it instead of rerunning chains.
 
 required_packages <- c("shiny", "bvarnet", "igraph", "readr")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace,
@@ -158,27 +160,29 @@ group_network <- group_analysis$network
 group_draws <- group_analysis$draws
 
 ui <- shiny::fluidPage(
-  #sets up the page and title
+  # Page title and short explanation of the network comparison for app users.
   shiny::tags$head(shiny::tags$style(shiny::HTML("body{background:#f5f7fb;color:#0f172a}.container-fluid{max-width:1250px}.well{background:white}"))),
   shiny::titlePanel("Participant and group symptom networks"),
-  shiny::p("Explore how symptoms predict one another from one day to the next. Temporal associations do not establish causation."),
+  shiny::p("Compare a participant's symptom network with the group network. Arrows show how one day's symptom ratings are associated with the next day's ratings; they do not establish cause and effect."),
   shiny::tabsetPanel(id = "pages",
-    #defines page one, participant data:
+    # Page 1: select, upload, and preview the participant's daily ratings.
     shiny::tabPanel("1. Participant data", value = "input",
       shiny::radioButtons("source", "Choose participant data", inline = TRUE,
         choices = c("Use a simulated participant" = "example", "Upload a participant CSV" = "upload")),
       shiny::conditionalPanel("input.source == 'example'",
         shiny::selectInput("person_id", "Simulated participant", choices = seq_len(simulation_env$N), selected = 1),
         shiny::numericInput("days", "Daily observations", 100, min = 30, max = simulation_env$Tt),
+        shiny::helpText("Generate the selected participant's ratings first. Review the preview, then choose Analyse participant to fit the model."),
         shiny::actionButton("generate", "Generate participant data"),
         shiny::actionButton("analyse_example", "Analyse participant")),
       shiny::conditionalPanel("input.source == 'upload'",
         shiny::fileInput("file", "Participant CSV", accept = ".csv"),
         shiny::helpText("Required columns: day plus the nine PHQ-9 symptom domains (down, tired, sleep, anhedonia, worthlessness, concentration, appetite, psychomotor, suicidal). One row per consecutive day; ratings 0–3."),
+        shiny::helpText("Preview the ratings before selecting Analyse uploaded data. Fitting the participant model may take a few minutes."),
         shiny::actionButton("preview_upload", "Preview uploaded data"),
         shiny::actionButton("analyse_upload", "Analyse uploaded data")),
       shiny::verbatimTextOutput("status"), shiny::h4("Daily ratings (first 10 rows)"), shiny::tableOutput("preview")),
-    #defines page two, comparing nerworks:
+    # Page 2: compare network plots and inspect the estimated edge differences.
     shiny::tabPanel("2. Compare networks", value = "networks",
       shiny::textOutput("counts"),
       shiny::fluidRow(shiny::column(6, shiny::plotOutput("group_plot", height = "500px")),
@@ -187,7 +191,7 @@ ui <- shiny::fluidPage(
       shiny::sliderInput("threshold", "Minimum displayed absolute coefficient", min = 0, max = .5, value = 0, step = .01),
       shiny::checkboxInput("loops", "Show self-loops", TRUE), shiny::checkboxInput("labels", "Show edge values", TRUE),
       shiny::h4("Edge estimates"), shiny::uiOutput("edges"),
-      shiny::p("Bold 90% intervals exclude zero, indicating a participant–group difference.")))
+      shiny::p("Bold 90% credible intervals do not include zero, indicating a difference between the participant and group edge estimates.")))
 )
 
 # Connect the existing interface to the analysis. Model errors are returned to
