@@ -1,0 +1,206 @@
+---
+title: "Group_Project_9"
+author: "Vilelmini Damkali, Miruna Urdea, Christos Avlonitis"
+date: "2026-10-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This file provides an example how a Bayesian VAR network analysis for depression would work. It also provides an app in which users can compare the networks between a group of individuals and an individual from that group. This allows
+
+The document proceeds as follows:
+
+1.  Data simulation: a group-level VAR network and an individual-level VAR network are simulated based on many individuals' data
+
+2.  Analysis: A sensitivity analysis is conducted, after which the edge of interest (sleep_lag1 -\> tired) under each model is extracted. Then a plot showing how P1’s estimated sleep → tired coefficient changes across three prior settings is given. It is a prior-sensitivity plot. Finally, the differences between the group and individual estimates are calculated, and each difference score's 90% CI is given.
+
+3.  App: The app can be opened, and the user can either input their own data or generate a random participant dataset to compare the individual's network and edges to those of the group
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Setup
+
+All source code is loaded from the "src" folder. This document exposes the high-level interfaces we need
+
+```{r}
+if (!requireNamespace("knitr", quietly = TRUE)) {
+  install.packages("knitr", repos = "https://cloud.r-project.org")
+}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+source("simulation_data.R")
+source("analysis_network.R")
+source("plot_prior_sensitivity_R.R")
+source("plots.R")
+source("app.R")
+```
+
+Load the necessary packages to run the project
+
+```{r}
+install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+cmdstanr::check_cmdstan_toolchain(fix = TRUE)
+cmdstanr::install_cmdstan(cores = 2,overwrite=TRUE)
+remotes::install_github("flo1met/bvarnet", force=TRUE)
+cmdstanr::cmdstan_version() 
+install.packages(c(
+  "bvarnet",
+  "qgraph",
+  "shiny",
+  "igraph",
+  "readr"
+))
+library(bvarnet)
+library(qgraph)
+library(shiny)
+library(igraph)
+library(readr)
+
+```
+
+## 2. Simulate data
+
+**1) Set the simulation size**
+
+```{r}
+set.seed(2026)  
+
+N <- 25    
+Tt <- 100  
+p <- 9  
+symptoms <- c(
+  "down", "tired", "sleep",
+  "anhedonia", "worthlessness", "concentration",
+  "appetite", "psychomotor", "suicidal"
+)
+Phi_group <- matrix(
+  0,
+  nrow = p,
+  ncol = p,
+  dimnames = list(symptoms, symptoms)
+)
+diag(Phi_group) <- c(
+  0.30, 0.30, 0.35,
+  0.30, 0.35, 0.30,
+  0.30, 0.30, 0.30
+)
+Phi_group["down", "sleep"] <- 0.25
+Phi_group["down", "tired"] <- 0.15
+Phi_group["anhedonia", "worthlessness"] <- 0.20
+Phi_group["worthlessness", "anhedonia"] <- 0.15
+Phi_group["concentration", "worthlessness"] <- 0.15
+Phi_group["tired", "appetite"] <- 0.15
+Phi_group["tired", "psychomotor"] <- 0.15
+Phi_group["suicidal", "worthlessness"] <- 0.20
+Phi_group["down", "suicidal"] <- 0.15
+
+Tau <- matrix(
+  0.08,
+  nrow = p,
+  ncol = p,
+  dimnames = list(symptoms, symptoms)
+)
+
+Tau["anhedonia", "worthlessness"] <- 0.15
+
+stationary <- function(M) {
+  max(Mod(eigen(M, only.values = TRUE)$values)) < 0.95
+}
+
+mu <- 1.5
+innov_sd <- 0.70
+
+long <- vector("list", N)
+
+for (i in seq_len(N)) {
+
+  repeat {
+    U <- matrix(
+      rnorm(p * p, mean = 0, sd = as.vector(Tau)),
+      nrow = p,
+      ncol = p
+    )
+    Phi_i <- Phi_group + U
+    if (i == 1) {
+      Phi_i["down", "sleep"] <- 0.00
+      Phi_i["anhedonia", "worthlessness"] <- 0.45
+      Phi_i["concentration", "anhedonia"] <- 0.30
+      Phi_i["suicidal", "worthlessness"] <- 0.35
+    }
+    if (stationary(Phi_i)) break
+  }
+  Y <- matrix(0, nrow = Tt, ncol = p)
+  Y[1, ] <- rnorm(p, mean = 0, sd = innov_sd)
+
+  for (t in 2:Tt) {
+    Y[t, ] <- Phi_i %*% Y[t - 1, ] +
+      rnorm(p, mean = 0, sd = innov_sd)
+  }
+  obs <- round(mu + Y)
+  obs[obs < 0] <- 0
+  obs[obs > 3] <- 3
+  long[[i]] <- data.frame(
+    id = i,
+    day = 1:Tt,
+    obs
+  )
+}
+ema <- do.call(rbind, long)
+colnames(ema) <- c("id", "day", symptoms)
+
+stopifnot(nrow(ema) == N * Tt)
+stopifnot(all(c("id", "day", symptoms) %in% names(ema)))
+stopifnot(all(as.matrix(ema[, symptoms]) %in% 0:3))
+
+rating_frequencies <- do.call(
+  rbind,
+  lapply(symptoms, function(s) {
+
+    counts <- table(
+      factor(ema[[s]], levels = 0:3)
+    )
+
+    data.frame(
+      symptom = s,
+      rating = 0:3,
+      count = as.integer(counts),
+      proportion = as.integer(counts) / nrow(ema)
+    )
+  })
+)
+
+print(rating_frequencies)
+
+boundary_frequencies <- rating_frequencies[
+  rating_frequencies$rating %in% c(0, 3),
+]
+
+print(boundary_frequencies)
+
+ratings_per_symptom <- aggregate(
+  count ~ symptom,
+  data = rating_frequencies,
+  FUN = sum
+)
+stopifnot(all(ratings_per_symptom$count == N * Tt))
+
+dir.create("data", showWarnings = FALSE, recursive = TRUE)
+
+write.csv(
+  ema,
+  "data/ema_simulated.csv",
+  row.names = FALSE
+)
+
+write.csv(
+  rating_frequencies,
+  "data/rating_frequencies.csv",
+  row.names = FALSE
+)
+
+```
