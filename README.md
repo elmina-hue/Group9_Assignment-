@@ -130,6 +130,7 @@ The project requires **R** and the following packages:
 - `shiny` — Interactive web application framework.
 - `igraph` — Network construction and plotting in the Shiny application.
 - `readr` — Reading CSV data.
+- `cmdstanr` — R interface for running Bayesian models using CmdStan.
 
 Install the required packages in R:
 
@@ -139,7 +140,8 @@ install.packages(c(
   "qgraph",
   "shiny",
   "igraph",
-  "readr"
+  "readr",
+  "cmdstanr"
 ))
 ```
 
