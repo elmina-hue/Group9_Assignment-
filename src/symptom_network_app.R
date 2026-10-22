@@ -2,9 +2,10 @@
 
 # This Shiny app compares a group-level symptom network with a participant-level
 # network. It uses the shared fitting functions in analysis_network.R and fits
-# the group model at startup so it can use posterior draws to calculate intervals
-# for participant-minus-group edge differences. The group posterior mean network
-# is also saved to data/group_network.csv. Each arrow represents a lag-one
+# the group model at startup when no reusable posterior cache exists. The cache
+# stores the mean network and temporal-coefficient draws needed for edge
+# difference intervals. The mean network is also saved to data/group_network.csv.
+# Each arrow represents a lag-one
 # temporal association: a symptom on one day predicting another symptom the next
 # day. The example data are simulated; these associations do not prove causation.
 
@@ -14,9 +15,9 @@
 # Run from the project root with:
 #   shiny::runApp("Group9_Assignment--main/src/symptom_network_app.R")
 # The group model uses the `ema` data frame created by simulate_data.R. Its
-# posterior mean matrix is written to src/data/group_network.csv for reference;
-# the app refits the model at startup because edge-difference intervals require
-# posterior draws, which are not stored in that CSV.
+# posterior mean matrix is written to src/data/group_network.csv, and its mean
+# matrix plus temporal draws are cached in src/data/group_posterior_cache.rds.
+# If that posterior cache exists, the app reuses it instead of rerunning chains.
 
 required_packages <- c("shiny", "bvarnet", "igraph", "readr")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace,
@@ -41,6 +42,7 @@ group_data <- simulation_env$ema
 
 # Path for the saved group posterior mean network matrix.
 group_network_path <- file.path(app_dir, "data", "group_network.csv")
+group_posterior_cache_path <- file.path(app_dir, "data", "group_posterior_cache.rds")
 
 # Validate uploaded participant data: one row per consecutive day, with all
 # nine symptom ratings recorded as integers from 0 to 3.
@@ -82,9 +84,31 @@ network_priors <- bvarnet::set_priors(
   sd_u = bvarnet::prior(family = "normal", loc = 0, scale = 0.35)
 )
 
-# Fit the group model through the shared analysis function so the app and report
-# use the same specification. Retain its fit for posterior edge comparisons.
+# Load the compact posterior cache when available. Otherwise fit through the
+# shared analysis function, then cache the mean matrix and phi draws needed here.
 prepare_group_reference <- function() {
+  if (file.exists(group_posterior_cache_path)) {
+    cached <- readRDS(group_posterior_cache_path)
+    if (!is.list(cached) || !all(c("network", "draws") %in% names(cached))) {
+      stop("Group posterior cache must contain 'network' and 'draws'.")
+    }
+    net <- as.matrix(cached$network)
+    draws <- as.matrix(cached$draws)
+    required_edges <- as.vector(outer(
+      seq_along(symptoms), seq_along(symptoms),
+      function(i, j) sprintf("phi[%d,%d]", i, j)
+    ))
+    if (!all(symptoms %in% rownames(net)) || !all(symptoms %in% colnames(net))) {
+      stop("Cached group network must label all nine symptoms on rows and columns.")
+    }
+    if (!all(required_edges %in% colnames(draws)) || nrow(draws) < 1L) {
+      stop("Group posterior cache is missing temporal-coefficient draws.")
+    }
+    net <- net[symptoms, symptoms, drop = FALSE]
+    draws <- draws[, required_edges, drop = FALSE]
+    return(list(network = net, draws = draws, fit = NULL))
+  }
+
   analysis <- run_with_stan_setup(function() {
     analysis_env$run_group_network(
       ema = as.data.frame(group_data), ys = symptoms, pr = network_priors,
@@ -94,9 +118,11 @@ prepare_group_reference <- function() {
   fit <- analysis$fit_group
   net <- bvarnet::extract_network_matrix(fit, stat = "mean")
   net <- net[symptoms, symptoms, drop = FALSE]
+  draws <- as.matrix(analysis_env$get_draws_p1(fit, parameter = "phi"))
   dir.create(dirname(group_network_path), recursive = TRUE, showWarnings = FALSE)
+  saveRDS(list(network = net, draws = draws), group_posterior_cache_path)
   utils::write.csv(net, group_network_path, row.names = TRUE)
-  list(network = net, fit = fit)
+  list(network = net, draws = draws, fit = fit)
 }
 
 # Fit the selected participant with the shared individual-level analysis
@@ -128,7 +154,7 @@ make_example_data <- function(person_id, n_days) {
 # for plotting; posterior draws are used to summarize edge differences.
 group_analysis <- prepare_group_reference()
 group_network <- group_analysis$network
-group_draws <- analysis_env$get_draws_p1(group_analysis$fit, parameter = "phi")
+group_draws <- group_analysis$draws
 
 ui <- shiny::fluidPage(
   #sets up the page and title
