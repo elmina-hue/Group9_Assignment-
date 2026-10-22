@@ -38,10 +38,6 @@ The document proceeds as follows:
     data or generate a random participant dataset to compare the
     individual's network and edges to those of the group
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 ## 1. Setup
 
 All source code is loaded from the "src" folder. This document exposes
