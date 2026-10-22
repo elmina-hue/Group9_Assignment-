@@ -50,7 +50,7 @@ if (!requireNamespace("knitr", quietly = TRUE)) {
 knitr::opts_chunk$set(message = FALSE, warning = FALSE)
 
 source("src/analysis_network.R")
-source("src/plot_prior_sensitivity_R.R")
+source("src/plot_prior_sensitivity_R.r")
 source("src/plots.R")
 ```
 
