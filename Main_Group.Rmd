@@ -111,34 +111,14 @@ if (!"package:bvarnet" %in% search()) {
 }
 ```
 
+5. Load some more necessary packages as indicated by the README instructions
+
 ```{r packages}
-if (!requireNamespace("cmdstanr", quietly = TRUE)) {
-  install.packages(
-    "cmdstanr",
-    repos = c("https://mc-stan.org/r-packages/", getOption("repos"))
-  )
-}
-
-
-
-install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
-cmdstanr::check_cmdstan_toolchain(fix = TRUE)
-cmdstanr::install_cmdstan(cores = 2,overwrite=TRUE)
-remotes::install_github("flo1met/bvarnet", force=TRUE)
-cmdstanr::cmdstan_version() 
-install.packages(c(
-  "bvarnet",
-  "qgraph",
-  "shiny",
-  "igraph",
-  "readr"
-))
 library(bvarnet)
 library(qgraph)
 library(shiny)
 library(igraph)
 library(readr)
-
 ```
 
 ## 2. Simulate data
